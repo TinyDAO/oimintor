@@ -26,7 +26,17 @@ const OI_LIMIT = 336
 const RATIO_LIMIT = 336
 /** 日 K 根数：8 根连续日 K，首尾收盘约跨 7 日 */
 const DAILY_K_LIMIT = 8
-const TOP_N = 48
+
+/** 按 24h 成交额取前 N 个山寨永续；数值越大请求越多、越慢 */
+export const TOP_N_CHOICES = [48, 64, 80, 100, 120, 150, 200] as const
+export type TopNChoice = (typeof TOP_N_CHOICES)[number]
+export const DEFAULT_TOP_N: TopNChoice = 100
+
+export function normalizeTopN(n: number): TopNChoice {
+  return (TOP_N_CHOICES as readonly number[]).includes(n)
+    ? (n as TopNChoice)
+    : DEFAULT_TOP_N
+}
 
 async function poolMap<T, R>(
   items: T[],
@@ -54,7 +64,9 @@ export type LoadProgress = (msg: string) => void
 
 export async function loadMarketInsights(
   onProgress?: LoadProgress,
+  topNInput: number = DEFAULT_TOP_N,
 ): Promise<{ insights: SymbolInsight[]; alphaHits: Set<string> }> {
+  const topN = normalizeTopN(topNInput)
   onProgress?.('exchangeInfo + 24h tickers…')
   const [info, tickers, alphaList] = await Promise.all([
     fetchExchangeInfo(),
@@ -64,7 +76,7 @@ export async function loadMarketInsights(
 
   const perp = perpetualUsdtSymbols(info.symbols)
   const alt = filterAltUniverse(perp)
-  const topSyms = topSymbolsByQuoteVolume(tickers, alt, TOP_N)
+  const topSyms = topSymbolsByQuoteVolume(tickers, alt, topN)
   const tmap = tickerMap(tickers)
   const alphaHits = futuresSymbolsFromAlpha(alphaList, perp)
 
