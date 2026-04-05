@@ -137,7 +137,7 @@ export function DetailDrawer({
               {row.isAlpha ? <span className="alpha-badge">Alpha</span> : null}
             </h2>
             <p className="muted small">
-              以下为公开市场数据聚合，非投资建议。链上聪明钱与合约账户无必然对应。
+              以下为公开市场数据聚合，非投资建议。
             </p>
           </div>
           <button type="button" className="ghost" onClick={onClose}>

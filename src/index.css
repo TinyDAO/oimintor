@@ -69,6 +69,53 @@ body::before {
   text-align: left;
 }
 
+.app-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.app-brand-logo {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  color: var(--muted);
+}
+
+.app-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.app-brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.app-brand-sub {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
 .hero {
   margin-bottom: 1.75rem;
 }
@@ -96,41 +143,12 @@ body::before {
   margin: 0;
 }
 
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1.5rem 0 1rem;
-}
-
-.tab {
-  font-family: var(--font-display);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  padding: 0.45rem 1rem;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-
-.tab:hover {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-.tab.on {
-  color: var(--bg);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
 .toolbar {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  margin-top: 1.35rem;
 }
 
 .btn {
@@ -500,40 +518,6 @@ body::before {
 .sk-grid {
   height: 220px;
   margin-top: 1rem;
-}
-
-.sm-note {
-  padding: 0.75rem 1rem 0;
-}
-
-.sm-table .buy {
-  color: var(--accent);
-}
-
-.sm-table .sell {
-  color: var(--danger);
-}
-
-.logo-cell img {
-  border-radius: 6px;
-}
-
-.logo-ph {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  background: var(--panel2);
-  border-radius: 6px;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.tag-cell {
-  font-size: 0.78rem;
-  color: var(--muted);
-  max-width: 240px;
 }
 
 .alpha-info-note {

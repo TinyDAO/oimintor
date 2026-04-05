@@ -17,6 +17,7 @@ export type SortKey =
   | 'pricePct'
   | 'pricePct7d'
   | 'oiPct'
+  | 'oiPct7d'
   | 'globalLsr'
   | 'topPosLsr'
   | 'spread'
@@ -42,6 +43,8 @@ function getVal(r: SymbolInsight, key: SortKey): number | string {
       return r.priceChange7dPct
     case 'oiPct':
       return r.oiChangePct
+    case 'oiPct7d':
+      return r.oiChange7dPct
     case 'globalLsr':
       return r.globalLsr
     case 'topPosLsr':
@@ -150,6 +153,9 @@ export function SignalTable({
               <SortBtn k="oiPct">OI Δ24h</SortBtn>
             </th>
             <th>
+              <SortBtn k="oiPct7d">OI Δ7d</SortBtn>
+            </th>
+            <th>
               <SortBtn k="globalLsr">用户LSR</SortBtn>
             </th>
             <th>
@@ -184,6 +190,7 @@ export function SignalTable({
               </td>
               <td className="mono num">{r.priceChange7dPct.toFixed(2)}%</td>
               <td className="mono num">{r.oiChangePct.toFixed(1)}%</td>
+              <td className="mono num">{r.oiChange7dPct.toFixed(1)}%</td>
               <td className="mono num">{r.globalLsr.toFixed(2)}</td>
               <td className="mono num">{r.topPosLsr.toFixed(2)}</td>
               <td className="mono num">{r.spread.toFixed(3)}</td>

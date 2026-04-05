@@ -14,6 +14,8 @@ export type SymbolInsight = {
   /** 日 K 首尾收盘估算（8 根 1d ≈ 7 日跨度；新币根数少时按可得区间） */
   priceChange7dPct: number
   oiChangePct: number
+  /** 最近约 7 日（168 根 1h）OI 涨跌幅 % */
+  oiChange7dPct: number
   oiHist: OiHistRow[]
   global: RatioRow[]
   topAcc: RatioRow[]
@@ -83,6 +85,15 @@ function oiChangePctRolling24h(sortedOi: OiHistRow[]): number {
   return pctChange(first, last)
 }
 
+/** 最近约 168 根 1h → 7 日 OI 涨跌；历史不足时按可得区间 */
+function oiChangePctRolling7d(sortedOi: OiHistRow[]): number {
+  if (sortedOi.length < 2) return 0
+  const slice = sortedOi.length >= 168 ? sortedOi.slice(-168) : sortedOi
+  const first = num(slice[0].sumOpenInterest)
+  const last = num(slice[slice.length - 1].sumOpenInterest)
+  return pctChange(first, last)
+}
+
 /** 日 K 升序：最早收盘 → 最新收盘 */
 export function priceChangeFromDailyKlines(candles: KlineCandle[]): number {
   if (candles.length < 2) return 0
@@ -105,6 +116,7 @@ export function buildInsight(
   const sortedOi = [...oiHist].sort((a, b) => a.timestamp - b.timestamp)
   const priceChange7dPct = priceChangeFromDailyKlines(dailyKlines)
   const oiChangePct = oiChangePctRolling24h(sortedOi)
+  const oiChange7dPct = oiChangePctRolling7d(sortedOi)
 
   const gLast = global.length ? num(global[global.length - 1].longShortRatio) : 1
   const tpLast = topPos.length
@@ -151,6 +163,7 @@ export function buildInsight(
     ticker,
     priceChange7dPct,
     oiChangePct,
+    oiChange7dPct,
     oiHist: sortedOi,
     global,
     topAcc,
