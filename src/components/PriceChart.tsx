@@ -8,6 +8,37 @@ import {
 } from 'recharts'
 import type { KlineCandle } from '../lib/api/futures'
 
+/** 合约币价展示：按量级给足小数位，低价币也能看清变动 */
+function formatCoinPrice(v: number): string {
+  if (!Number.isFinite(v)) return String(v)
+  const a = Math.abs(v)
+  if (a >= 1_000_000) {
+    return v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  }
+  if (a >= 1000) {
+    return v.toLocaleString(undefined, { maximumFractionDigits: 3 })
+  }
+  if (a >= 1) {
+    return v.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6,
+    })
+  }
+  if (a >= 0.01) {
+    return v.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8,
+    })
+  }
+  if (a >= 1e-8) {
+    return v.toLocaleString(undefined, {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 12,
+    })
+  }
+  return v.toExponential(4)
+}
+
 export function PriceLine({
   candles,
   height = 180,
@@ -44,13 +75,7 @@ export function PriceLine({
             width={56}
             domain={['auto', 'auto']}
             tickFormatter={(v) =>
-              typeof v === 'number'
-                ? v < 1
-                  ? v.toFixed(4)
-                  : v < 100
-                    ? v.toFixed(2)
-                    : v.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                : String(v)
+              typeof v === 'number' ? formatCoinPrice(v) : String(v)
             }
           />
           <Tooltip
@@ -59,7 +84,7 @@ export function PriceLine({
               border: '1px solid var(--border)',
             }}
             formatter={(v) =>
-              typeof v === 'number' ? v.toLocaleString() : String(v ?? '')
+              typeof v === 'number' ? formatCoinPrice(v) : String(v ?? '')
             }
             labelFormatter={(l) => new Date(l as number).toLocaleString()}
           />
