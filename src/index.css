@@ -178,6 +178,11 @@ body::before {
   margin: 0 0 0.75rem;
 }
 
+.auto-refresh-countdown {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .toolbar-field {
   display: inline-flex;
   align-items: center;
@@ -657,4 +662,156 @@ a.alpha-link {
 
 a.alpha-link:hover {
   text-decoration: underline;
+}
+
+/* —— 手机端：压缩表格行高与工具栏，避免单行过高 —— */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+
+  #root {
+    padding: 1rem 0.65rem 2.5rem;
+  }
+
+  .app-top {
+    padding-bottom: 0.85rem;
+  }
+
+  .app-brand-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .app-brand-name {
+    font-size: 1.02rem;
+  }
+
+  .hero {
+    margin-bottom: 1.1rem;
+  }
+
+  .hero-top h1 {
+    font-size: clamp(1.35rem, 6vw, 1.85rem);
+  }
+
+  .toolbar {
+    gap: 0.5rem 0.65rem;
+    margin-top: 1rem;
+  }
+
+  .chk {
+    font-size: 0.82rem;
+  }
+
+  .btn {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.88rem;
+  }
+
+  .symbol-search {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 100%;
+    padding: 0.38rem 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .toolbar-select {
+    padding: 0.32rem 1.75rem 0.32rem 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  .toolbar-label {
+    font-size: 0.72rem;
+  }
+
+  .auto-refresh-countdown {
+    flex: 1 1 100%;
+    font-size: 0.75rem;
+  }
+
+  .table-wrap {
+    border-radius: 10px;
+  }
+
+  .sig-table {
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .sig-table th,
+  .sig-table td {
+    padding: 0.3rem 0.38rem;
+    vertical-align: middle;
+  }
+
+  .sig-table th {
+    font-size: 0.58rem;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .th-sort {
+    gap: 0.12rem;
+  }
+
+  .sort-arrow {
+    font-size: 0.65rem;
+  }
+
+  .sym {
+    font-size: 0.92em;
+  }
+
+  .alpha-badge {
+    font-size: 0.55rem;
+    margin-left: 0.2rem;
+  }
+
+  .flags {
+    flex-wrap: nowrap;
+    gap: 0.1rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 56vw;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .flags::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sig-flag {
+    font-size: 0.5rem;
+    padding: 0.04rem 0.18rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+    line-height: 1.2;
+  }
+
+  .spark-cell {
+    width: 92px;
+    min-width: 80px;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .ratio-spark {
+    min-height: 28px;
+  }
+
+  .spark-empty {
+    font-size: 0.72rem;
+    line-height: 28px;
+  }
+
+  .bn-link {
+    font-size: 0.75rem;
+  }
+
+  .main {
+    min-height: 200px;
+  }
 }

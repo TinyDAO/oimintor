@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   loadMarketInsights,
   TOP_N_CHOICES,
@@ -12,6 +12,9 @@ import { SignalTable } from './components/SignalTable'
 import { DetailDrawer } from './components/DetailDrawer'
 
 const TOP_N_STORAGE_KEY = 'oi-monitor-top-n'
+const AUTO_REFRESH_STORAGE_KEY = 'oi-monitor-auto-refresh'
+/** 自动刷新间隔（毫秒） */
+const AUTO_REFRESH_MS = 5 * 60 * 1000
 
 function readStoredTopN(): TopNChoice {
   if (typeof localStorage === 'undefined') return DEFAULT_TOP_N
@@ -24,8 +27,30 @@ function readStoredTopN(): TopNChoice {
   }
 }
 
+function readStoredAutoRefresh(): boolean {
+  if (typeof localStorage === 'undefined') return true
+  try {
+    const raw = localStorage.getItem(AUTO_REFRESH_STORAGE_KEY)
+    if (raw === null) return true
+    return raw === '1' || raw === 'true'
+  } catch {
+    return true
+  }
+}
+
+function formatCountdown(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 export default function App() {
   const [topN, setTopN] = useState<TopNChoice>(() => readStoredTopN())
+  const [autoRefresh, setAutoRefresh] = useState(() => readStoredAutoRefresh())
+  const [nextDeadline, setNextDeadline] = useState<number | null>(null)
+  /** 每秒递增，驱动倒计时展示 */
+  const [tick, setTick] = useState(0)
+  const autoRefreshRef = useRef(autoRefresh)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [progress, setProgress] = useState('')
@@ -33,6 +58,10 @@ export default function App() {
   const [alphaOnly, setAlphaOnly] = useState(false)
   const [symbolQuery, setSymbolQuery] = useState('')
   const [selected, setSelected] = useState<SymbolInsight | null>(null)
+
+  useEffect(() => {
+    autoRefreshRef.current = autoRefresh
+  }, [autoRefresh])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -45,12 +74,39 @@ export default function App() {
     } finally {
       setLoading(false)
       setProgress('')
+      if (autoRefreshRef.current) {
+        setNextDeadline(Date.now() + AUTO_REFRESH_MS)
+      }
     }
   }, [topN])
 
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  useEffect(() => {
+    if (!autoRefresh) return
+    const id = window.setInterval(() => setTick((x) => x + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [autoRefresh])
+
+  useEffect(() => {
+    if (!autoRefresh || loading || nextDeadline === null) return
+    const ms = nextDeadline - Date.now()
+    if (ms <= 0) {
+      void refresh()
+      return
+    }
+    const t = window.setTimeout(() => void refresh(), ms)
+    return () => window.clearTimeout(t)
+  }, [autoRefresh, loading, nextDeadline, refresh])
+
+  const countdownLabel = useMemo(() => {
+    if (!autoRefresh || nextDeadline === null) return null
+    if (loading) return '刷新中…'
+    const sec = Math.max(0, Math.ceil((nextDeadline - Date.now()) / 1000))
+    return `约 ${formatCountdown(sec)} 后自动刷新`
+  }, [autoRefresh, nextDeadline, loading, tick])
 
   const tableRows = useMemo(() => {
     let rows = alphaOnly ? insights.filter((x) => x.isAlpha) : insights
@@ -89,6 +145,30 @@ export default function App() {
           <button type="button" className="btn" onClick={refresh} disabled={loading}>
             {loading ? '加载中…' : '刷新'}
           </button>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => {
+                const on = e.target.checked
+                setAutoRefresh(on)
+                try {
+                  localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, on ? '1' : '0')
+                } catch {
+                  /* ignore */
+                }
+                if (on) {
+                  setNextDeadline(Date.now() + AUTO_REFRESH_MS)
+                } else {
+                  setNextDeadline(null)
+                }
+              }}
+            />
+            每 5 分钟自动刷新
+          </label>
+          {countdownLabel ? (
+            <span className="auto-refresh-countdown muted small">{countdownLabel}</span>
+          ) : null}
           <label className="toolbar-field">
             <span className="toolbar-label">榜单深度</span>
             <select

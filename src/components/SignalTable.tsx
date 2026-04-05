@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SymbolInsight } from '../lib/signals/compute'
 import { BinanceFuturesLink } from './BinanceLink'
@@ -76,6 +76,8 @@ function compare(
   return mult * (na < nb ? -1 : 1)
 }
 
+const MQ_COMPACT = '(max-width: 640px)'
+
 export function SignalTable({
   rows,
   onSelect,
@@ -86,6 +88,17 @@ export function SignalTable({
   /** 默认：24h OI 变化率倒序（高到低） */
   const [sortKey, setSortKey] = useState<SortKey>('oiPct')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [compact, setCompact] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(MQ_COMPACT).matches,
+  )
+
+  useEffect(() => {
+    const mq = window.matchMedia(MQ_COMPACT)
+    const apply = () => setCompact(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
 
   const sortedRows = useMemo(() => {
     const list = [...rows]
@@ -203,7 +216,11 @@ export function SignalTable({
                 </div>
               </td>
               <td className="spark-cell">
-                <RatioSpark global={r.global} topPos={r.topPos} height={40} />
+                <RatioSpark
+                  global={r.global}
+                  topPos={r.topPos}
+                  height={compact ? 28 : 40}
+                />
               </td>
               <td onClick={(e) => e.stopPropagation()}>
                 <BinanceFuturesLink symbol={r.symbol}>BN →</BinanceFuturesLink>

@@ -204,6 +204,26 @@ export function DetailDrawer({
                     background: 'var(--panel2)',
                     border: '1px solid var(--border)',
                   }}
+                  labelFormatter={(label) => {
+                    const n =
+                      typeof label === 'number' ? label : Number(label)
+                    if (!Number.isFinite(n)) return String(label)
+                    return new Date(n).toLocaleString('zh-CN', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })
+                  }}
+                  formatter={(value: unknown) => {
+                    if (value == null) return '—'
+                    const n =
+                      typeof value === 'number'
+                        ? value
+                        : parseFloat(String(value))
+                    return Number.isFinite(n) ? n.toFixed(3) : String(value)
+                  }}
                 />
                 <Legend wrapperStyle={{ fontSize: 10, paddingTop: 2 }} />
                 <Line
