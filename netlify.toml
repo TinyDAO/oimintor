@@ -1,0 +1,17 @@
+[[redirects]]
+  from = "/api/fapi/*"
+  to = "https://fapi.binance.com/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bapi/*"
+  to = "https://www.binance.com/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/web3/*"
+  to = "https://web3.binance.com/:splat"
+  status = 200
+  force = true
