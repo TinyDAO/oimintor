@@ -83,8 +83,8 @@ export function SignalTable({
   rows: SymbolInsight[]
   onSelect: (r: SymbolInsight) => void
 }) {
-  /** 默认：24h 涨幅倒序（高到低） */
-  const [sortKey, setSortKey] = useState<SortKey>('pricePct')
+  /** 默认：24h OI 变化率倒序（高到低） */
+  const [sortKey, setSortKey] = useState<SortKey>('oiPct')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const sortedRows = useMemo(() => {
