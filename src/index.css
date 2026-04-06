@@ -143,6 +143,36 @@ body::before {
   margin: 0;
 }
 
+.view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0.75rem;
+}
+
+.view-tab {
+  font-family: var(--font-display);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 0.42rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.view-tab:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.view-tab.on {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -813,5 +843,83 @@ a.alpha-link:hover {
 
   .main {
     min-height: 200px;
+  }
+
+  .view-tabs {
+    margin: 0.85rem 0 0.5rem;
+  }
+
+  .view-tab {
+    font-size: 0.82rem;
+    padding: 0.35rem 0.8rem;
+  }
+}
+
+/* 聪明钱（合约）表格 */
+.sm-futures-note {
+  margin: 0 0 0.65rem;
+  max-width: 72ch;
+  line-height: 1.35;
+}
+
+.sm-futures-wrap {
+  padding-top: 0.35rem;
+}
+
+.sm-side {
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.sm-side--buy {
+  color: var(--accent);
+}
+
+.sm-side--sell {
+  color: var(--danger);
+}
+
+.sm-net--buy {
+  color: rgba(94, 234, 212, 0.95);
+}
+
+.sm-net--sell {
+  color: rgba(251, 113, 133, 0.95);
+}
+
+.muted-soft {
+  color: rgba(139, 134, 153, 0.92);
+}
+
+.sm-people {
+  font-size: 0.86rem;
+}
+
+.sm-wh {
+  font-size: 0.72em;
+  color: var(--muted);
+  margin-left: 0.15rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .sm-futures-table th:nth-child(6),
+  .sm-futures-table td:nth-child(6),
+  .sm-futures-table th:nth-child(5),
+  .sm-futures-table td:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .sm-futures-table th:nth-child(8),
+  .sm-futures-table td:nth-child(8),
+  .sm-futures-table th:nth-child(7),
+  .sm-futures-table td:nth-child(7) {
+    display: none;
+  }
+
+  .sm-futures-note {
+    font-size: 0.72rem;
   }
 }

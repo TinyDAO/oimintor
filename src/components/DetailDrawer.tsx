@@ -24,6 +24,11 @@ import {
   findAlphaTokenByBaseSymbol,
   type AlphaToken,
 } from '../lib/api/alpha'
+import {
+  DRAWER_CHART_MARGIN_RATIO,
+  DRAWER_X_MIN_TICK_GAP,
+  DRAWER_Y_LEFT_W,
+} from '../lib/chartDrawerLayout'
 
 function mergeRatio(
   g: SymbolInsight['global'],
@@ -185,10 +190,13 @@ export function DetailDrawer({
           <h3>多空比三轨（1h，约 14 天 · 用户 / 大户账户 / 大户持仓）</h3>
           <div className="drawer-chart-tall">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={ratioData} margin={{ top: 4, right: 8, left: 0, bottom: 2 }}>
+              <LineChart
+                data={ratioData}
+                margin={{ ...DRAWER_CHART_MARGIN_RATIO }}
+              >
                 <XAxis
                   dataKey="t"
-                  minTickGap={36}
+                  minTickGap={DRAWER_X_MIN_TICK_GAP}
                   tickFormatter={(x) =>
                     new Date(x).toLocaleDateString(undefined, {
                       month: 'short',
@@ -198,7 +206,11 @@ export function DetailDrawer({
                   stroke="var(--muted)"
                   tick={{ fill: 'var(--muted)', fontSize: 10 }}
                 />
-                <YAxis stroke="var(--muted)" tick={{ fontSize: 10 }} width={40} />
+                <YAxis
+                  stroke="var(--muted)"
+                  tick={{ fontSize: 10 }}
+                  width={DRAWER_Y_LEFT_W}
+                />
                 <Tooltip
                   contentStyle={{
                     background: 'var(--panel2)',

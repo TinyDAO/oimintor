@@ -9,6 +9,12 @@ import {
   Legend,
 } from 'recharts'
 import type { OiHistRow } from '../lib/api/futures'
+import {
+  DRAWER_CHART_MARGIN_OI,
+  DRAWER_X_MIN_TICK_GAP,
+  DRAWER_Y_LEFT_W,
+  DRAWER_Y_RIGHT_W,
+} from '../lib/chartDrawerLayout'
 
 function fmtOi(v: number): string {
   if (!Number.isFinite(v)) return '—'
@@ -45,11 +51,11 @@ export function OiArea({
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
-          margin={{ top: 8, right: 4, left: 0, bottom: 4 }}
+          margin={{ ...DRAWER_CHART_MARGIN_OI }}
         >
           <XAxis
             dataKey="t"
-            minTickGap={40}
+            minTickGap={DRAWER_X_MIN_TICK_GAP}
             tickFormatter={(ts) =>
               new Date(ts).toLocaleDateString(undefined, {
                 month: 'short',
@@ -63,7 +69,7 @@ export function OiArea({
             yAxisId="oi"
             stroke="var(--accent)"
             tick={{ fill: 'var(--accent)', fontSize: 10 }}
-            width={52}
+            width={DRAWER_Y_LEFT_W}
             tickFormatter={(v) => fmtOi(typeof v === 'number' ? v : 0)}
           />
           <YAxis
@@ -71,7 +77,7 @@ export function OiArea({
             orientation="right"
             stroke="var(--oi-value)"
             tick={{ fill: 'var(--oi-value)', fontSize: 10 }}
-            width={58}
+            width={DRAWER_Y_RIGHT_W}
             tickFormatter={(v) => fmtUsd(typeof v === 'number' ? v : 0)}
           />
           <Tooltip
