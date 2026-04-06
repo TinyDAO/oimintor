@@ -11,6 +11,8 @@
  *   OI_THRESHOLD_PCT — 默认 50（24h 滚动 OI 变化 %）
  *   OI_ALERT_STATE_FILE — 状态 JSON 路径，默认本目录下 .oi-alert-state.json
  *   DRY_RUN=1 — 只打印，不发 Telegram、不写状态
+ *   BINANCE_FAPI_BASE — FAPI 根路径。默认走 Vercel 同源代理（与站点 /api/fapi 一致），避免部分地区直连 fapi.binance.com 返回 451。
+ *     例：直连 `https://fapi.binance.com`；代理 `https://oimintor.vercel.app/api/fapi`（路径仍带 /fapi/v1、/futures/...）
  */
 
 import { readFile, writeFile } from 'node:fs/promises'
@@ -19,8 +21,10 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+/** 与 vercel.json 中 /api/fapi → fapi.binance.com 一致；本地/受限地区可省略环境变量即用代理 */
+const DEFAULT_FAPI_PROXY = 'https://oimintor.vercel.app/api/fapi'
 const FAPI =
-  process.env.BINANCE_FAPI_BASE?.replace(/\/$/, '') || 'https://fapi.binance.com'
+  process.env.BINANCE_FAPI_BASE?.replace(/\/$/, '') || DEFAULT_FAPI_PROXY
 const UA = 'oi-monitor/oi-spike-alert (github-actions)'
 
 const TOP_N = Math.max(1, parseInt(process.env.TOP_N || '100', 10) || 100)
