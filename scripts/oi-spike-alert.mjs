@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /** 与 vercel.json 中 /api/fapi → fapi.binance.com 一致；本地/受限地区可省略环境变量即用代理 */
-const DEFAULT_FAPI_PROXY = 'https://oimintor.vercel.app/api/fapi'
+const DEFAULT_FAPI_PROXY = 'https://oimintor.vercel.app/api'
 const FAPI =
   process.env.BINANCE_FAPI_BASE?.replace(/\/$/, '') || DEFAULT_FAPI_PROXY
 const UA = 'oi-monitor/oi-spike-alert (github-actions)'
