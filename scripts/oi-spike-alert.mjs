@@ -144,6 +144,7 @@ async function poolMap(items, concurrency, fn) {
 }
 
 async function main() {
+  console.log('FAPI', FAPI)
   const [info, tickers] = await Promise.all([
     getJson(`${FAPI}/fapi/v1/exchangeInfo`),
     getJson(`${FAPI}/fapi/v1/ticker/24hr`),
