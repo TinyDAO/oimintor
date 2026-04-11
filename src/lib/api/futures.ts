@@ -39,6 +39,52 @@ export async function fetchTicker24hAll(): Promise<Ticker24h[]> {
   return getJson<Ticker24h[]>(fapi('/fapi/v1/ticker/24hr'))
 }
 
+/** 指数价、标记价等（USDT-M 永续） */
+export type PremiumIndex = {
+  symbol: string
+  markPrice: string
+  indexPrice: string
+  lastFundingRate: string
+  nextFundingTime: number
+  time: number
+}
+
+export async function fetchPremiumIndex(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<PremiumIndex> {
+  const q = new URLSearchParams({ symbol })
+  return getJson<PremiumIndex>(
+    `${fapi('/fapi/v1/premiumIndex')}?${q}`,
+    signal,
+  )
+}
+
+/** Binance 合约指数成分（各所现货/指数源及权重） */
+export type IndexConstituentRow = {
+  exchange: string
+  symbol: string
+  price: string
+  weight: string
+}
+
+export type IndexConstituents = {
+  symbol: string
+  time: number
+  constituents: IndexConstituentRow[]
+}
+
+export async function fetchIndexConstituents(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<IndexConstituents> {
+  const q = new URLSearchParams({ symbol })
+  return getJson<IndexConstituents>(
+    `${fapi('/fapi/v1/constituents')}?${q}`,
+    signal,
+  )
+}
+
 export type OiHistRow = {
   symbol: string
   sumOpenInterest: string

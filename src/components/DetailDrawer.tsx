@@ -9,7 +9,14 @@ import {
   Legend,
 } from 'recharts'
 import type { SymbolInsight } from '../lib/signals/compute'
-import { fetchKlines, type KlineCandle } from '../lib/api/futures'
+import {
+  fetchIndexConstituents,
+  fetchKlines,
+  fetchPremiumIndex,
+  type IndexConstituents,
+  type KlineCandle,
+  type PremiumIndex,
+} from '../lib/api/futures'
 import { BinanceFuturesLink } from './BinanceLink'
 import { OiArea } from './OiChart'
 import { PriceLine } from './PriceChart'
@@ -29,6 +36,7 @@ import {
   DRAWER_X_MIN_TICK_GAP,
   DRAWER_Y_LEFT_W,
 } from '../lib/chartDrawerLayout'
+import { formatCoinPrice } from '../lib/formatPrice'
 
 function mergeRatio(
   g: SymbolInsight['global'],
@@ -53,6 +61,51 @@ function mergeRatio(
 
 const KLINE_LIMIT = 336
 
+const INDEX_EXCHANGE_LABEL: Record<string, string> = {
+  binance: 'Binance',
+  okex: 'Okex',
+  okx: 'Okex',
+  gateio: 'Gateio',
+  kucoin: 'Kucoin',
+  mxc: 'Mxc',
+  bitget: 'Bitget',
+  coinbase: 'Coinbase',
+  bybit: 'Bybit',
+  huobi: 'Huobi',
+  kraken: 'Kraken',
+}
+
+function labelIndexExchange(ex: string): string {
+  const k = ex.trim().toLowerCase()
+  if (INDEX_EXCHANGE_LABEL[k]) return INDEX_EXCHANGE_LABEL[k]
+  if (!ex) return '—'
+  return ex.charAt(0).toUpperCase() + ex.slice(1).toLowerCase()
+}
+
+function formatConstituentWeightPct(w: string): string {
+  const n = parseFloat(w)
+  if (!Number.isFinite(n)) return '—'
+  return `${(n * 100).toFixed(2)}%`
+}
+
+function sortedConstituents(
+  c: IndexConstituents | null,
+): IndexConstituents['constituents'] {
+  if (!c?.constituents?.length) return []
+  return [...c.constituents].sort(
+    (a, b) => parseFloat(b.weight) - parseFloat(a.weight),
+  )
+}
+
+type PremiumUi =
+  | {
+      sym: string
+      kind: 'ok'
+      data: PremiumIndex
+      constituents: IndexConstituents | null
+    }
+  | { sym: string; kind: 'err'; message: string }
+
 export function DetailDrawer({
   row,
   onClose,
@@ -66,6 +119,7 @@ export function DetailDrawer({
   const [alphaCex, setAlphaCex] = useState<AlphaToken | null>(null)
   const [alphaLoading, setAlphaLoading] = useState(false)
   const [alphaErr, setAlphaErr] = useState<string | null>(null)
+  const [premiumUi, setPremiumUi] = useState<PremiumUi | null>(null)
 
   useEffect(() => {
     if (!row) {
@@ -86,6 +140,29 @@ export function DetailDrawer({
       .catch((e: Error) => {
         if (ac.signal.aborted) return
         setKlErr(e.message ?? 'K 线加载失败')
+      })
+    return () => ac.abort()
+  }, [row?.symbol])
+
+  useEffect(() => {
+    if (!row) return
+    const sym = row.symbol
+    const ac = new AbortController()
+    Promise.all([
+      fetchPremiumIndex(sym, ac.signal),
+      fetchIndexConstituents(sym, ac.signal).catch(() => null),
+    ])
+      .then(([data, constituents]) => {
+        if (ac.signal.aborted) return
+        setPremiumUi({ sym, kind: 'ok', data, constituents })
+      })
+      .catch((e: Error) => {
+        if (ac.signal.aborted) return
+        setPremiumUi({
+          sym,
+          kind: 'err',
+          message: e.message ?? '指数加载失败',
+        })
       })
     return () => ac.abort()
   }, [row?.symbol])
@@ -127,6 +204,16 @@ export function DetailDrawer({
 
   if (!row) return null
   const ratioData = mergeRatio(row.global, row.topAcc, row.topPos)
+  const premiumMatch = premiumUi && premiumUi.sym === row.symbol
+  const premium =
+    premiumMatch && premiumUi.kind === 'ok' ? premiumUi.data : null
+  const constituents =
+    premiumMatch && premiumUi.kind === 'ok' ? premiumUi.constituents : null
+  const premiumErr =
+    premiumMatch && premiumUi.kind === 'err' ? premiumUi.message : null
+  const premiumLoading = !premiumMatch
+  const constituentRows = sortedConstituents(constituents)
+
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <aside
@@ -270,6 +357,72 @@ export function DetailDrawer({
           </div>
         </section>
         <footer className="drawer-foot">
+          <h3 className="drawer-foot-title">指数信息</h3>
+          <div className="drawer-index-strip" aria-label="合约指数与标记价格">
+            {premiumErr ? (
+              <p className="muted small" style={{ margin: '0 0 0.5rem' }}>
+                {premiumErr}
+              </p>
+            ) : premium ? (
+              <div className="drawer-index-grid">
+                <div className="drawer-index-cell">
+                  <span className="drawer-index-label">指数价格</span>
+                  <span className="drawer-index-value">
+                    {formatCoinPrice(parseFloat(premium.indexPrice))}
+                  </span>
+                </div>
+                <div className="drawer-index-cell">
+                  <span className="drawer-index-label">标记价格</span>
+                  <span className="drawer-index-value drawer-index-value-muted">
+                    {formatCoinPrice(parseFloat(premium.markPrice))}
+                  </span>
+                </div>
+              </div>
+            ) : premiumLoading ? (
+              <div
+                className="sk sk-line drawer-index-skel"
+                style={{ borderRadius: 6 }}
+              />
+            ) : null}
+          </div>
+          {premium && constituentRows.length > 0 ? (
+            <div
+              className="drawer-constituents"
+              aria-label="指数成分与权重"
+            >
+              <p className="drawer-constituents-hint muted small">
+                以下为 Binance 指数成分权重（各所交易对及占比），非独立行情对比。
+              </p>
+              <div className="drawer-constituents-table-wrap">
+                <table className="drawer-constituents-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">交易所</th>
+                      <th scope="col">交易对</th>
+                      <th scope="col" className="num">
+                        百分比
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {constituentRows.map((r, i) => (
+                      <tr key={`${r.exchange}-${r.symbol}-${i}`}>
+                        <td>{labelIndexExchange(r.exchange)}</td>
+                        <td className="mono">{r.symbol}</td>
+                        <td className="num">
+                          {formatConstituentWeightPct(r.weight)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : premium && !premiumLoading && constituentRows.length === 0 ? (
+            <p className="muted small drawer-constituents-empty">
+              暂无指数成分数据（部分合约无第三方成分或未返回）。
+            </p>
+          ) : null}
           <BinanceFuturesLink symbol={row.symbol}>在 Binance 合约打开</BinanceFuturesLink>
         </footer>
       </aside>
