@@ -523,6 +523,92 @@ body::before {
   cursor: pointer;
 }
 
+.variant-panel {
+  margin-top: 0.35rem;
+}
+
+.variant-meta {
+  margin: 0 0 0.45rem;
+  line-height: 1.35;
+}
+
+.variant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.variant-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.variant-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.variant-row-hit {
+  border-left: 3px solid var(--accent);
+}
+
+.variant-row-miss {
+  border-left: 3px solid var(--border);
+}
+
+.variant-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.variant-code {
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.variant-alias {
+  font-size: 0.76rem;
+  color: var(--text);
+}
+
+.variant-hint {
+  font-size: 0.64rem;
+  line-height: 1.3;
+}
+
+.variant-verdict {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.74rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  background: var(--panel2);
+  color: var(--muted);
+}
+
+.variant-row-hit .variant-verdict {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.variant-reasons {
+  margin: 0;
+  padding: 0.35rem 0.6rem 0.45rem 1.25rem;
+  border-top: 1px solid var(--border);
+  line-height: 1.35;
+}
+
 .drawer-section {
   margin-bottom: 0.65rem;
 }

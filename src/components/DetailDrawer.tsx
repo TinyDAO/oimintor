@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   LineChart,
   Line,
@@ -37,6 +37,9 @@ import {
   DRAWER_Y_LEFT_W,
 } from '../lib/chartDrawerLayout'
 import { formatCoinPrice } from '../lib/formatPrice'
+import type { VariantSignals } from '../lib/signals/variantSignals'
+import { computeVariantSignals } from '../lib/signals/variantSignals'
+import { VariantSignalsPanel } from './VariantSignalsPanel'
 
 function mergeRatio(
   g: SymbolInsight['global'],
@@ -202,6 +205,11 @@ export function DetailDrawer({
     return () => ac.abort()
   }, [row?.isAlpha, row?.symbol])
 
+  const variantSignals: VariantSignals | null = useMemo(() => {
+    if (!row) return null
+    return computeVariantSignals(row, klines)
+  }, [row, klines])
+
   if (!row) return null
   const ratioData = mergeRatio(row.global, row.topAcc, row.topPos)
   const premiumMatch = premiumUi && premiumUi.sym === row.symbol
@@ -236,6 +244,14 @@ export function DetailDrawer({
             关闭
           </button>
         </header>
+        <section className="drawer-section">
+          <h3>信号类型（启发式）</h3>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            对照 V4A / V7 / V8 框架的近似校验（基于 24h 行情、1h OI
+            与 K 线），非投资建议。
+          </p>
+          <VariantSignalsPanel signals={variantSignals!} />
+        </section>
         {row.isAlpha ? (
           <section className="drawer-section">
             <h3>Alpha 市场信息</h3>
