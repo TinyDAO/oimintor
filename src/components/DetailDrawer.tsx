@@ -32,6 +32,10 @@ import {
   type AlphaToken,
 } from '../lib/api/alpha'
 import {
+  fetchSpotTokenMarketInfo,
+  type SpotTokenMarketInfo,
+} from '../lib/api/coinGecko'
+import {
   DRAWER_CHART_MARGIN_RATIO,
   DRAWER_X_MIN_TICK_GAP,
   DRAWER_Y_LEFT_W,
@@ -40,6 +44,7 @@ import { formatCoinPrice } from '../lib/formatPrice'
 import type { VariantSignals } from '../lib/signals/variantSignals'
 import { computeVariantSignals } from '../lib/signals/variantSignals'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
+import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 
 function mergeRatio(
   g: SymbolInsight['global'],
@@ -123,6 +128,9 @@ export function DetailDrawer({
   const [alphaLoading, setAlphaLoading] = useState(false)
   const [alphaErr, setAlphaErr] = useState<string | null>(null)
   const [premiumUi, setPremiumUi] = useState<PremiumUi | null>(null)
+  const [spotInfo, setSpotInfo] = useState<SpotTokenMarketInfo | null>(null)
+  const [spotLoading, setSpotLoading] = useState(false)
+  const [spotErr, setSpotErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!row) {
@@ -205,6 +213,31 @@ export function DetailDrawer({
     return () => ac.abort()
   }, [row?.isAlpha, row?.symbol])
 
+  useEffect(() => {
+    if (!row?.symbol || row.isAlpha) {
+      setSpotInfo(null)
+      setSpotErr(null)
+      setSpotLoading(false)
+      return
+    }
+    const base = row.symbol.replace(/USDT$/i, '')
+    const ac = new AbortController()
+    setSpotLoading(true)
+    setSpotErr(null)
+    setSpotInfo(null)
+    fetchSpotTokenMarketInfo(base, ac.signal)
+      .then((d) => {
+        if (!ac.signal.aborted) setSpotInfo(d)
+      })
+      .catch((e: Error) => {
+        if (!ac.signal.aborted) setSpotErr(e.message ?? '现货信息加载失败')
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setSpotLoading(false)
+      })
+    return () => ac.abort()
+  }, [row?.symbol, row?.isAlpha])
+
   const variantSignals: VariantSignals | null = useMemo(() => {
     if (!row) return null
     return computeVariantSignals(row, klines)
@@ -244,14 +277,20 @@ export function DetailDrawer({
             关闭
           </button>
         </header>
-        <section className="drawer-section">
-          <h3>信号类型（启发式）</h3>
-          <p className="muted small" style={{ marginTop: 0 }}>
-            对照 V4A / V7 / V8 框架的近似校验（基于 24h 行情、1h OI
-            与 K 线），非投资建议。
-          </p>
-          <VariantSignalsPanel signals={variantSignals!} />
-        </section>
+        {!row.isAlpha ? (
+          <section className="drawer-section">
+            <h3>现货 / 市值信息</h3>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              通过 CoinGecko 匹配基币（与 USDT 永续标的相关的现货市场），非交易所官方口径。
+            </p>
+            <SpotTokenInfoPanel
+              baseSymbol={row.symbol.replace(/USDT$/i, '')}
+              info={spotInfo}
+              loading={spotLoading}
+              error={spotErr}
+            />
+          </section>
+        ) : null}
         {row.isAlpha ? (
           <section className="drawer-section">
             <h3>Alpha 市场信息</h3>
@@ -441,6 +480,19 @@ export function DetailDrawer({
           ) : null}
           <BinanceFuturesLink symbol={row.symbol}>在 Binance 合约打开</BinanceFuturesLink>
         </footer>
+        {variantSignals &&
+        (variantSignals.v4a.hit ||
+          variantSignals.v7.hit ||
+          variantSignals.v8.hit) ? (
+          <section className="drawer-section drawer-variant-bottom">
+            <h3>信号类型（启发式）</h3>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              对照 V4A / V7 / V8 框架的近似校验（基于 24h 行情、1h OI
+              与 K 线），非投资建议。
+            </p>
+            <VariantSignalsPanel signals={variantSignals} />
+          </section>
+        ) : null}
       </aside>
     </div>
   )

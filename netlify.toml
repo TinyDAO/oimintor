@@ -15,3 +15,9 @@
   to = "https://web3.binance.com/:splat"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/cg/*"
+  to = "https://api.coingecko.com/api/v3/:splat"
+  status = 200
+  force = true

@@ -523,6 +523,12 @@ body::before {
   cursor: pointer;
 }
 
+.drawer-variant-bottom {
+  margin-top: 0.35rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
 .variant-panel {
   margin-top: 0.35rem;
 }
@@ -825,6 +831,20 @@ body::before {
 .sk-grid {
   height: 220px;
   margin-top: 1rem;
+}
+
+.spot-token-info-lead {
+  margin: 0 0 0.45rem;
+  line-height: 1.4;
+}
+
+.spot-token-note {
+  font-weight: 400;
+  margin-left: 0.2rem;
+}
+
+.spot-token-dl {
+  margin-top: 0.35rem;
 }
 
 .alpha-info-note {
