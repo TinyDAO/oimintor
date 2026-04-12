@@ -8,6 +8,6 @@ export const bapi = (path: string) =>
 export const web3 = (path: string) =>
   `/api/web3${path.startsWith('/') ? path : `/${path}`}`
 
-/** CoinGecko REST v3（经 /api/cg 同源代理） */
-export const cg = (path: string) =>
-  `/api/cg${path.startsWith('/') ? path : `/${path}`}`
+/** Binance 现货 REST（api.binance.com，经 /api/spot 同源代理） */
+export const spot = (path: string) =>
+  `/api/spot${path.startsWith('/') ? path : `/${path}`}`

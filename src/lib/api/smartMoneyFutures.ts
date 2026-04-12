@@ -46,3 +46,53 @@ export async function fetchSmartMoneyFuturesSignals(
   }
   return j.data
 }
+
+/** GET …/smart-money/signal/overview?symbol= — 与合约页「聪明钱总览」同源 */
+export type SmartMoneyOverviewData = {
+  symbol: string
+  /** 交易员总持仓名义（USDT，接口字段） */
+  totalPositions: number
+  totalTraders: number
+  /** 多头名义 / 空头名义 */
+  longShortRatio: number
+  longTraders: number
+  longWhales: number
+  longTradersQty: number
+  longWhalesQty: number
+  longTradersAvgEntryPrice: number
+  longWhalesAvgEntryPrice: number
+  shortTraders: number
+  shortWhales: number
+  shortTradersQty: number
+  shortWhalesQty: number
+  shortTradersAvgEntryPrice: number
+  shortWhalesAvgEntryPrice: number
+  longProfitTraders: number
+  shortProfitTraders: number
+  longProfitWhales: number
+  shortProfitWhales: number
+}
+
+type OverviewResponse = {
+  code: string
+  message?: string | null
+  data?: SmartMoneyOverviewData
+  success?: boolean
+}
+
+export async function fetchSmartMoneyOverview(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<SmartMoneyOverviewData> {
+  const q = new URLSearchParams({ symbol: symbol.toUpperCase() })
+  const url = bapi(
+    `/bapi/futures/v1/public/future/smart-money/signal/overview?${q}`,
+  )
+  const r = await fetch(url, { signal })
+  if (!r.ok) throw new Error(`聪明钱总览 HTTP ${r.status}`)
+  const j = (await r.json()) as OverviewResponse
+  if (j.code !== '000000' || !j.data) {
+    throw new Error(j.message ?? '聪明钱总览返回异常')
+  }
+  return j.data
+}

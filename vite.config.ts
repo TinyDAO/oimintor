@@ -20,10 +20,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/web3/, ''),
       },
-      '/api/cg': {
-        target: 'https://api.coingecko.com/api/v3',
+      '/api/spot': {
+        target: 'https://api.binance.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/cg/, ''),
+        rewrite: (path) => path.replace(/^\/api\/spot/, ''),
       },
     },
   },

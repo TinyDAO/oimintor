@@ -1,36 +1,30 @@
-import type { SpotTokenMarketInfo } from '../lib/api/coinGecko'
+import type { BinanceSpotDrawerInfo } from '../lib/api/binanceSpot'
 import { formatCoinPrice } from '../lib/formatPrice'
 
-function fmtUsdCompact(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return '—'
-  const a = Math.abs(n)
-  if (a >= 1e12) return `$${(n / 1e12).toFixed(2)}T`
-  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
-  if (a >= 1e6) return `$${(n / 1e6).toFixed(2)}M`
-  if (a >= 1e3) return `$${(n / 1e3).toFixed(2)}k`
-  return `$${n.toFixed(2)}`
+function n(s: string): number {
+  return parseFloat(s)
 }
 
-function fmtPct(n: number | null | undefined, digits = 4): string {
-  if (n == null || !Number.isFinite(n)) return '—'
-  return `${n.toFixed(digits)}%`
+function fmtUsdVol(s: string): string {
+  const v = n(s)
+  if (!Number.isFinite(v)) return '—'
+  const a = Math.abs(v)
+  if (a >= 1e9) return `$${(v / 1e9).toFixed(2)}B`
+  if (a >= 1e6) return `$${(v / 1e6).toFixed(2)}M`
+  if (a >= 1e3) return `$${(v / 1e3).toFixed(2)}k`
+  return `$${v.toFixed(2)}`
 }
 
-function fmtSupply(n: number | null | undefined, sym: string): string {
-  if (n == null || !Number.isFinite(n)) return '—'
-  return `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${sym}`
+function fmtBaseVol(s: string, sym: string): string {
+  const v = n(s)
+  if (!Number.isFinite(v)) return '—'
+  return `${v.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${sym}`
 }
 
-function fmtMaxSupply(n: number | null | undefined, sym: string): string {
-  if (n == null || !Number.isFinite(n)) return `∞ ${sym}`
-  return fmtSupply(n, sym)
-}
-
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toISOString().slice(0, 10)
+function fmtPriceStr(s: string): string {
+  const v = n(s)
+  if (!Number.isFinite(v)) return '—'
+  return formatCoinPrice(v)
 }
 
 export function SpotTokenInfoPanel({
@@ -40,7 +34,7 @@ export function SpotTokenInfoPanel({
   error,
 }: {
   baseSymbol: string
-  info: SpotTokenMarketInfo | null
+  info: BinanceSpotDrawerInfo | null
   loading: boolean
   error: string | null
 }) {
@@ -64,96 +58,75 @@ export function SpotTokenInfoPanel({
     return (
       <div className="spot-token-info">
         <p className="muted small">
-          未在 CoinGecko 检索到「{baseSymbol}」对应条目（新币或符号不一致时常见）。
+          Binance 现货无「{baseSymbol}USDT」交易对，或已下架 / 与合约标的命名不一致。
         </p>
       </div>
     )
   }
 
-  const sym = info.symbol
+  const base = info.baseAsset
+  const pct = n(info.priceChangePercent)
 
   return (
     <div className="spot-token-info">
       <p className="muted small spot-token-info-lead">
-        {info.name}（{sym}）·{' '}
-        <a href={info.cgUrl} target="_blank" rel="noreferrer noopener">
-          CoinGecko →
+        现货 {info.spotSymbol}（{info.status}）·{' '}
+        <a href={info.tradeUrl} target="_blank" rel="noreferrer noopener">
+          Binance 现货 →
         </a>
+      </p>
+      <p className="muted small" style={{ marginBottom: '0.45rem' }}>
+        数据来自 Binance 现货公开 REST（/api/v3），不含市值排行、流通量等字段。
       </p>
       <dl className="alpha-dl spot-token-dl">
         <div>
-          <dt>排行</dt>
+          <dt>最新价</dt>
+          <dd className="mono">{fmtPriceStr(info.lastPrice)} USDT</dd>
+        </div>
+        <div>
+          <dt>24h 涨跌</dt>
           <dd className="mono">
-            {info.rank != null ? `No. ${info.rank}` : '—'}
-          </dd>
-        </div>
-        <div>
-          <dt>市值</dt>
-          <dd className="mono">{fmtUsdCompact(info.marketCapUsd)}</dd>
-        </div>
-        <div>
-          <dt>完全稀释市值</dt>
-          <dd className="mono">{fmtUsdCompact(info.fdvUsd)}</dd>
-        </div>
-        <div>
-          <dt>市场占有率</dt>
-          <dd className="mono">{fmtPct(info.marketSharePct)}</dd>
-        </div>
-        <div>
-          <dt>成交量（24h）</dt>
-          <dd className="mono">{fmtUsdCompact(info.volume24hUsd)}</dd>
-        </div>
-        <div>
-          <dt>成交量 / 市值</dt>
-          <dd className="mono">{fmtPct(info.volToMcapRatioPct, 2)}</dd>
-        </div>
-        <div>
-          <dt>流通数量</dt>
-          <dd className="mono">{fmtSupply(info.circulatingSupply, sym)}</dd>
-        </div>
-        <div>
-          <dt>最大供应</dt>
-          <dd className="mono">{fmtMaxSupply(info.maxSupply, sym)}</dd>
-        </div>
-        <div>
-          <dt>总供应</dt>
-          <dd className="mono">{fmtSupply(info.totalSupply, sym)}</dd>
-        </div>
-        <div>
-          <dt>场内持仓集中度</dt>
-          <dd className="muted small">
-            —
-            <span className="spot-token-note">（CoinGecko 不提供）</span>
-          </dd>
-        </div>
-        <div>
-          <dt>发行日期</dt>
-          <dd>{fmtDate(info.genesisDate)}</dd>
-        </div>
-        <div>
-          <dt>发行价</dt>
-          <dd className="mono">
-            {info.icoUsdHint ?? (
-              <span className="muted">—</span>
+            {Number.isFinite(pct) ? (
+              <span
+                style={{
+                  color:
+                    pct > 0 ? '#3fb950' : pct < 0 ? '#f85149' : undefined,
+                }}
+              >
+                {pct >= 0 ? '+' : ''}
+                {pct.toFixed(2)}%
+              </span>
+            ) : (
+              '—'
             )}
-            {!info.icoUsdHint ? (
-              <span className="spot-token-note muted small">
-                （多数币种无公开 ICO 价）
-              </span>
-            ) : null}
           </dd>
         </div>
         <div>
-          <dt>历史最高价</dt>
+          <dt>24h 高低</dt>
           <dd className="mono">
-            {info.athUsd != null && Number.isFinite(info.athUsd)
-              ? `$${formatCoinPrice(info.athUsd)}`
-              : '—'}
-            {info.athDate ? (
-              <span className="muted small" style={{ marginLeft: '0.35rem' }}>
-                ({fmtDate(info.athDate)})
-              </span>
-            ) : null}
+            {fmtPriceStr(info.highPrice)} / {fmtPriceStr(info.lowPrice)}
+          </dd>
+        </div>
+        <div>
+          <dt>24h 开盘价</dt>
+          <dd className="mono">{fmtPriceStr(info.openPrice)}</dd>
+        </div>
+        <div>
+          <dt>加权平均价（24h）</dt>
+          <dd className="mono">{fmtPriceStr(info.weightedAvgPrice)}</dd>
+        </div>
+        <div>
+          <dt>24h 成交额（计价）</dt>
+          <dd className="mono">{fmtUsdVol(info.quoteVolume)}</dd>
+        </div>
+        <div>
+          <dt>24h 成交量（基币）</dt>
+          <dd className="mono">{fmtBaseVol(info.volumeBase, base)}</dd>
+        </div>
+        <div>
+          <dt>24h 成交笔数</dt>
+          <dd className="mono">
+            {info.count != null ? info.count.toLocaleString() : '—'}
           </dd>
         </div>
       </dl>

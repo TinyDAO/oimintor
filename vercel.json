@@ -17,8 +17,8 @@
       "destination": "https://web3.binance.com/:path*"
     },
     {
-      "source": "/api/cg/:path*",
-      "destination": "https://api.coingecko.com/api/v3/:path*"
+      "source": "/api/spot/:path*",
+      "destination": "https://api.binance.com/:path*"
     },
     {
       "source": "/(.*)",

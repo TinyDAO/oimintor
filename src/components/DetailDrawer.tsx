@@ -32,9 +32,9 @@ import {
   type AlphaToken,
 } from '../lib/api/alpha'
 import {
-  fetchSpotTokenMarketInfo,
-  type SpotTokenMarketInfo,
-} from '../lib/api/coinGecko'
+  fetchBinanceSpotMarketInfo,
+  type BinanceSpotDrawerInfo,
+} from '../lib/api/binanceSpot'
 import {
   DRAWER_CHART_MARGIN_RATIO,
   DRAWER_X_MIN_TICK_GAP,
@@ -45,6 +45,11 @@ import type { VariantSignals } from '../lib/signals/variantSignals'
 import { computeVariantSignals } from '../lib/signals/variantSignals'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
+import {
+  fetchSmartMoneyOverview,
+  type SmartMoneyOverviewData,
+} from '../lib/api/smartMoneyFutures'
+import { SmartMoneyOverviewPanel } from './SmartMoneyOverviewPanel'
 
 function mergeRatio(
   g: SymbolInsight['global'],
@@ -128,9 +133,14 @@ export function DetailDrawer({
   const [alphaLoading, setAlphaLoading] = useState(false)
   const [alphaErr, setAlphaErr] = useState<string | null>(null)
   const [premiumUi, setPremiumUi] = useState<PremiumUi | null>(null)
-  const [spotInfo, setSpotInfo] = useState<SpotTokenMarketInfo | null>(null)
+  const [spotInfo, setSpotInfo] = useState<BinanceSpotDrawerInfo | null>(null)
   const [spotLoading, setSpotLoading] = useState(false)
   const [spotErr, setSpotErr] = useState<string | null>(null)
+  const [smOverview, setSmOverview] = useState<SmartMoneyOverviewData | null>(
+    null,
+  )
+  const [smOvLoading, setSmOvLoading] = useState(false)
+  const [smOvErr, setSmOvErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!row) {
@@ -220,12 +230,11 @@ export function DetailDrawer({
       setSpotLoading(false)
       return
     }
-    const base = row.symbol.replace(/USDT$/i, '')
     const ac = new AbortController()
     setSpotLoading(true)
     setSpotErr(null)
     setSpotInfo(null)
-    fetchSpotTokenMarketInfo(base, ac.signal)
+    fetchBinanceSpotMarketInfo(row.symbol, ac.signal)
       .then((d) => {
         if (!ac.signal.aborted) setSpotInfo(d)
       })
@@ -237,6 +246,31 @@ export function DetailDrawer({
       })
     return () => ac.abort()
   }, [row?.symbol, row?.isAlpha])
+
+  useEffect(() => {
+    if (!row?.symbol) {
+      setSmOverview(null)
+      setSmOvErr(null)
+      setSmOvLoading(false)
+      return
+    }
+    const sym = row.symbol
+    const ac = new AbortController()
+    setSmOvLoading(true)
+    setSmOvErr(null)
+    setSmOverview(null)
+    fetchSmartMoneyOverview(sym, ac.signal)
+      .then((d) => {
+        if (!ac.signal.aborted) setSmOverview(d)
+      })
+      .catch((e: Error) => {
+        if (!ac.signal.aborted) setSmOvErr(e.message ?? '聪明钱总览加载失败')
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setSmOvLoading(false)
+      })
+    return () => ac.abort()
+  }, [row?.symbol])
 
   const variantSignals: VariantSignals | null = useMemo(() => {
     if (!row) return null
@@ -279,9 +313,9 @@ export function DetailDrawer({
         </header>
         {!row.isAlpha ? (
           <section className="drawer-section">
-            <h3>现货 / 市值信息</h3>
+            <h3>现货行情（Binance）</h3>
             <p className="muted small" style={{ marginTop: 0 }}>
-              通过 CoinGecko 匹配基币（与 USDT 永续标的相关的现货市场），非交易所官方口径。
+              与永续同名的 USDT 现货对（/api/v3），与合约行情可能不同。
             </p>
             <SpotTokenInfoPanel
               baseSymbol={row.symbol.replace(/USDT$/i, '')}
@@ -327,6 +361,21 @@ export function DetailDrawer({
         <section className="drawer-section">
           <h3>未平仓 OI 与名义价值（1h，约 14 天）</h3>
           <OiArea rows={row.oiHist} height={176} />
+        </section>
+        <section className="drawer-section">
+          <h3>聪明钱总览</h3>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            Binance 合约聪明钱聚合（普通 / 大户分桶）；与站内列表接口同源 overview。
+          </p>
+          {smOvLoading ? (
+            <div className="sk sk-line" style={{ height: 140, borderRadius: 8 }} />
+          ) : smOvErr ? (
+            <p className="muted small">{smOvErr}</p>
+          ) : smOverview ? (
+            <SmartMoneyOverviewPanel data={smOverview} />
+          ) : (
+            <p className="muted small">暂无数据</p>
+          )}
         </section>
         <section className="drawer-section">
           <h3>多空比三轨（1h，约 14 天 · 用户 / 大户账户 / 大户持仓）</h3>
