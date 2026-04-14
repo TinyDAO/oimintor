@@ -11,7 +11,13 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
-type SortKey = 'absNet' | 'symbol' | 'side'
+type SortKey = 'absNet' | 'symbol' | 'side' | 'netPct'
+
+function netNotionalPct(r: SmartMoneyFuturesRow): number {
+  const denom = Math.abs(r.longNotional) + Math.abs(r.shortNotional)
+  if (!Number.isFinite(denom) || denom <= 0) return 0
+  return (Math.abs(r.netNotional) / denom) * 100
+}
 
 function compareRows(
   a: SmartMoneyFuturesRow,
@@ -27,6 +33,12 @@ function compareRows(
   if (key === 'side') {
     const c = a.side.localeCompare(b.side)
     return mult * (c || a.symbol.localeCompare(b.symbol))
+  }
+  if (key === 'netPct') {
+    const na = netNotionalPct(a)
+    const nb = netNotionalPct(b)
+    if (na === nb) return a.symbol.localeCompare(b.symbol)
+    return mult * (na < nb ? -1 : 1)
   }
   const na = Math.abs(a.netNotional)
   const nb = Math.abs(b.netNotional)
@@ -96,6 +108,7 @@ export function SmartMoneyFuturesTable({
             <Th k="symbol">合约</Th>
             <Th k="side">净方向</Th>
             <Th k="absNet">|净名义|</Th>
+            <Th k="netPct">成交量占比</Th>
             <th className="th-no-sort">净名义</th>
             <th className="th-no-sort">多名义</th>
             <th className="th-no-sort">空名义</th>
@@ -122,6 +135,7 @@ export function SmartMoneyFuturesTable({
                   </span>
                 </td>
                 <td className="mono num">{fmtUsd(Math.abs(r.netNotional))}</td>
+                <td className="mono num">{netNotionalPct(r).toFixed(2)}%</td>
                 <td className={`mono num sm-net sm-net--${r.side.toLowerCase()}`}>
                   {fmtUsd(r.netNotional)}
                 </td>
