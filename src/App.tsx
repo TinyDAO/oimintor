@@ -13,6 +13,12 @@ import {
   type SmartMoneyFuturesRow,
   type SmartMoneyTimeRange,
 } from './lib/api/smartMoneyFutures'
+import {
+  findOiCrossesAboveThreshold,
+  notifyOiCrossesDesktop,
+  playOiCrossChime,
+  snapshotOiPct24h,
+} from './lib/oiCrossAlert'
 import { AppLogo } from './components/AppLogo'
 import { SignalTable } from './components/SignalTable'
 import { SmartMoneyFuturesTable } from './components/SmartMoneyFuturesTable'
@@ -90,6 +96,12 @@ export default function App() {
   const [symbolQuery, setSymbolQuery] = useState('')
   const [selected, setSelected] = useState<SymbolInsight | null>(null)
 
+  /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿 50% 变为上穿 50%） */
+  const prevOiPctSnapshotRef = useRef<Map<string, number> | null>(null)
+  const [oiCrossAlerts, setOiCrossAlerts] = useState<
+    { id: string; symbol: string; prevPct: number; currPct: number }[]
+  >([])
+
   useEffect(() => {
     autoRefreshRef.current = autoRefresh
   }, [autoRefresh])
@@ -109,7 +121,27 @@ export default function App() {
     setOiErr(null)
     try {
       const { insights: ins } = await loadMarketInsights(setProgress, topN)
+      const prevMap = prevOiPctSnapshotRef.current
+      const crosses = findOiCrossesAboveThreshold(prevMap, ins)
+      prevOiPctSnapshotRef.current = snapshotOiPct24h(ins)
       setInsights(ins)
+      if (crosses.length > 0) {
+        const stamp = Date.now()
+        setOiCrossAlerts((prev) => {
+          const next = [
+            ...crosses.map((c, i) => ({
+              id: `${stamp}-${c.symbol}-${i}`,
+              symbol: c.symbol,
+              prevPct: c.prevPct,
+              currPct: c.currPct,
+            })),
+            ...prev,
+          ]
+          return next.slice(0, 16)
+        })
+        const notified = notifyOiCrossesDesktop(crosses)
+        if (!notified) playOiCrossChime()
+      }
     } catch (e) {
       setOiErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -213,6 +245,23 @@ export default function App() {
     else void loadSm()
   }
 
+  async function requestDesktopNotifyPermission() {
+    if (typeof Notification === 'undefined') return
+    try {
+      await Notification.requestPermission()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function dismissOiCross(id: string) {
+    setOiCrossAlerts((rows) => rows.filter((r) => r.id !== id))
+  }
+
+  function clearAllOiCrossAlerts() {
+    setOiCrossAlerts([])
+  }
+
   return (
     <div className="app">
       <header className="app-top">
@@ -314,6 +363,16 @@ export default function App() {
                 />
                 仅 Alpha 标的
               </label>
+              {typeof Notification !== 'undefined' &&
+              Notification.permission === 'default' ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost small"
+                  onClick={() => void requestDesktopNotifyPermission()}
+                >
+                  启用桌面通知（OI 突破 50%）
+                </button>
+              ) : null}
             </>
           ) : (
             <label className="toolbar-field">
@@ -393,6 +452,45 @@ export default function App() {
               <p className="filter-empty muted small">
                 当前筛选下无合约，请修改搜索词或取消「仅 Alpha」。
               </p>
+            ) : null}
+            {oiCrossAlerts.length > 0 ? (
+              <div className="oi-cross-strip" role="region" aria-label="24h OI 突破提醒">
+                <div className="oi-cross-strip-head">
+                  <span className="oi-cross-strip-title">24h OI% 刚突破 50%</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost small"
+                    onClick={clearAllOiCrossAlerts}
+                  >
+                    全部关闭
+                  </button>
+                </div>
+                <div className="oi-cross-cards">
+                  {oiCrossAlerts.map((a) => (
+                    <div key={a.id} className="oi-cross-card">
+                      <div className="oi-cross-card-body">
+                        <span className="oi-cross-sym">
+                          {a.symbol.replace('USDT', '')}
+                        </span>
+                        <span className="oi-cross-arrow mono" aria-hidden>
+                          →
+                        </span>
+                        <span className="oi-cross-pcts mono">
+                          {a.prevPct.toFixed(1)}% → {a.currPct.toFixed(1)}%
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="oi-cross-dismiss"
+                        onClick={() => dismissOiCross(a.id)}
+                        aria-label={`关闭 ${a.symbol} 提醒`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : null}
             <SignalTable rows={tableRows} onSelect={setSelected} />
           </>

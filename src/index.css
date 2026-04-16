@@ -274,6 +274,20 @@ body::before {
   cursor: not-allowed;
 }
 
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .chk {
   display: inline-flex;
   align-items: center;
@@ -294,6 +308,97 @@ body::before {
   padding: 0.65rem 1rem;
   border-radius: 8px;
   margin-bottom: 1rem;
+}
+
+.oi-cross-strip {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(251, 191, 36, 0.1),
+    rgba(94, 234, 212, 0.06)
+  );
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.oi-cross-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.oi-cross-strip-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--warn);
+}
+
+.oi-cross-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.oi-cross-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.oi-cross-card-body {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.oi-cross-sym {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.oi-cross-arrow {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.oi-cross-pcts {
+  font-size: 0.82rem;
+  color: var(--oi-value);
+}
+
+.oi-cross-dismiss {
+  flex-shrink: 0;
+  width: 2rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.oi-cross-dismiss:hover {
+  color: var(--text);
+  background: rgba(251, 113, 133, 0.15);
 }
 
 .main {
