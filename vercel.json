@@ -1,27 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/fapi/:path*",
-      "destination": "https://fapi.binance.com/:path*"
-    },
-    {
-      "source": "/api/bapi/:path*",
-      "destination": "https://www.binance.com/:path*"
-    },
-    {
-      "source": "/api/web3/:path*",
-      "destination": "https://web3.binance.com/:path*"
-    },
-    {
-      "source": "/api/spot/:path*",
-      "destination": "https://api.binance.com/:path*"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

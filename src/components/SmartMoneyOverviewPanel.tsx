@@ -10,6 +10,44 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
+/** 带符号的 USDT 金额（盈亏），用于估算展示 */
+function fmtUsdSigned(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  const sign = n > 0 ? '+' : n < 0 ? '−' : ''
+  const a = Math.abs(n)
+  let body: string
+  if (a >= 1e9) body = `${(a / 1e9).toFixed(2)}B`
+  else if (a >= 1e6) body = `${(a / 1e6).toFixed(2)}M`
+  else if (a >= 1e3) body = `${(a / 1e3).toFixed(1)}k`
+  else body = a.toFixed(0)
+  return `${sign}$${body}`
+}
+
+function pnlClass(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return 'sm-overview-pnl-val-flat'
+  return n > 0 ? 'sm-overview-pnl-val-up' : 'sm-overview-pnl-val-down'
+}
+
+function estimateBucketUpl(
+  d: SmartMoneyOverviewData,
+  mark: number,
+): {
+  longTrader: number
+  longWhale: number
+  shortTrader: number
+  shortWhale: number
+} {
+  return {
+    longTrader:
+      (mark - d.longTradersAvgEntryPrice) * d.longTradersQty,
+    longWhale: (mark - d.longWhalesAvgEntryPrice) * d.longWhalesQty,
+    shortTrader:
+      (d.shortTradersAvgEntryPrice - mark) * d.shortTradersQty,
+    shortWhale:
+      (d.shortWhalesAvgEntryPrice - mark) * d.shortWhalesQty,
+  }
+}
+
 function sideNotional(d: SmartMoneyOverviewData, side: 'long' | 'short'): number {
   if (side === 'long') {
     return (
@@ -36,8 +74,11 @@ function weightedEntry(d: SmartMoneyOverviewData, side: 'long' | 'short'): numbe
 
 export function SmartMoneyOverviewPanel({
   data,
+  markPriceUsd,
 }: {
   data: SmartMoneyOverviewData
+  /** 永续标记价（USDT）；用于估算分桶未实现盈亏 */
+  markPriceUsd?: number
 }) {
   const longN = sideNotional(data, 'long')
   const shortN = sideNotional(data, 'short')
@@ -59,6 +100,20 @@ export function SmartMoneyOverviewPanel({
   const shortEntry = weightedEntry(data, 'short')
 
   const base = data.symbol.replace(/USDT$/i, '')
+
+  const markOk =
+    markPriceUsd != null && Number.isFinite(markPriceUsd) && markPriceUsd > 0
+  const upl = markOk
+    ? estimateBucketUpl(data, markPriceUsd!)
+    : null
+  const longUplTotal = upl
+    ? upl.longTrader + upl.longWhale
+    : NaN
+  const shortUplTotal = upl
+    ? upl.shortTrader + upl.shortWhale
+    : NaN
+  const netUpl =
+    upl != null ? longUplTotal + shortUplTotal : NaN
 
   return (
     <div className="sm-overview">
@@ -83,6 +138,72 @@ export function SmartMoneyOverviewPanel({
               : '—'}
           </span>
         </div>
+      </div>
+
+      <div className="sm-overview-pnl">
+        <div className="sm-overview-pnl-title">
+          估算未实现盈亏（USDT）
+          {markOk ? (
+            <span className="sm-overview-pnl-mark muted small">
+              标记价 {formatCoinPrice(markPriceUsd!)}
+            </span>
+          ) : (
+            <span className="sm-overview-pnl-mark muted small">
+              待标记价加载后按均价估算
+            </span>
+          )}
+        </div>
+        {markOk && upl ? (
+          <dl className="sm-overview-pnl-dl">
+            <div>
+              <dt>多头 · 普通</dt>
+              <dd className={`mono ${pnlClass(upl.longTrader)}`}>
+                {fmtUsdSigned(upl.longTrader)}
+              </dd>
+            </div>
+            <div>
+              <dt>多头 · 大户</dt>
+              <dd className={`mono ${pnlClass(upl.longWhale)}`}>
+                {fmtUsdSigned(upl.longWhale)}
+              </dd>
+            </div>
+            <div className="sm-overview-pnl-subtotal">
+              <dt>多头 · 合计</dt>
+              <dd className={`mono ${pnlClass(longUplTotal)}`}>
+                {fmtUsdSigned(longUplTotal)}
+              </dd>
+            </div>
+            <div>
+              <dt>空头 · 普通</dt>
+              <dd className={`mono ${pnlClass(upl.shortTrader)}`}>
+                {fmtUsdSigned(upl.shortTrader)}
+              </dd>
+            </div>
+            <div>
+              <dt>空头 · 大户</dt>
+              <dd className={`mono ${pnlClass(upl.shortWhale)}`}>
+                {fmtUsdSigned(upl.shortWhale)}
+              </dd>
+            </div>
+            <div className="sm-overview-pnl-subtotal">
+              <dt>空头 · 合计</dt>
+              <dd className={`mono ${pnlClass(shortUplTotal)}`}>
+                {fmtUsdSigned(shortUplTotal)}
+              </dd>
+            </div>
+            <div className="sm-overview-pnl-net">
+              <dt>多空净额（聪明钱侧）</dt>
+              <dd className={`mono ${pnlClass(netUpl)}`}>
+                {fmtUsdSigned(netUpl)}
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="muted small sm-overview-pnl-wait">
+            接口不直接返回盈亏金额；指数区标记价就绪后，此处用「持仓量 ×（标记价 −
+            分桶均价）」估算多头，空头方向相反。
+          </p>
+        )}
       </div>
 
       <div className="sm-overview-bar-wrap" aria-hidden>
@@ -208,7 +329,7 @@ export function SmartMoneyOverviewPanel({
       </div>
 
       <p className="muted small sm-overview-foot">
-        数据来源 Binance 合约聪明钱公开接口；未实现盈亏等字段接口未返回。普通/大户为接口分桶。
+        数据来源 Binance 合约聪明钱公开接口。盈亏金额为按标记价与分桶持仓均价的估算，非官方逐笔汇总；普通/大户为接口分桶。
       </p>
     </div>
   )

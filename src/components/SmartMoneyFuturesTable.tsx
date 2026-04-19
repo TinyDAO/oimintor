@@ -48,8 +48,11 @@ function compareRows(
 
 export function SmartMoneyFuturesTable({
   rows,
+  onOpenDetail,
 }: {
   rows: SmartMoneyFuturesRow[]
+  /** 打开与 OI 榜相同的合约详情抽屉（拉取单合约结构数据） */
+  onOpenDetail?: (symbol: string) => void
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('absNet')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -114,7 +117,7 @@ export function SmartMoneyFuturesTable({
             <th className="th-no-sort">空名义</th>
             <th className="th-no-sort">多·人数</th>
             <th className="th-no-sort">空·人数</th>
-            <th className="th-no-sort"></th>
+            <th className="th-no-sort">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -124,7 +127,11 @@ export function SmartMoneyFuturesTable({
             return (
               <tr
                 key={`${r.symbol}-${i}`}
+                className={onOpenDetail ? 'sig-row' : undefined}
                 style={{ animationDelay: `${Math.min(i, 20) * 24}ms` }}
+                onClick={
+                  onOpenDetail ? () => onOpenDetail(r.symbol) : undefined
+                }
               >
                 <td>
                   <span className="sym">{r.symbol.replace(/USDT$/i, '')}</span>
@@ -153,7 +160,19 @@ export function SmartMoneyFuturesTable({
                     （鲸 {r.shortWhales}）
                   </span>
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
+                <td
+                  className="sm-futures-actions"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {onOpenDetail ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost small sm-futures-detail-btn"
+                      onClick={() => onOpenDetail(r.symbol)}
+                    >
+                      详情
+                    </button>
+                  ) : null}
                   <BinanceFuturesLink symbol={r.symbol}>BN →</BinanceFuturesLink>
                 </td>
               </tr>

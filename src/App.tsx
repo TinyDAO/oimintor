@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   loadMarketInsights,
+  loadSymbolInsight,
   TOP_N_CHOICES,
   DEFAULT_TOP_N,
   normalizeTopN,
@@ -23,6 +24,10 @@ import { AppLogo } from './components/AppLogo'
 import { SignalTable } from './components/SignalTable'
 import { SmartMoneyFuturesTable } from './components/SmartMoneyFuturesTable'
 import { DetailDrawer } from './components/DetailDrawer'
+import {
+  scanVariantSignalsForInsights,
+  type VariantScanUiState,
+} from './lib/scanVariantHits'
 
 const TOP_N_STORAGE_KEY = 'oi-monitor-top-n'
 const AUTO_REFRESH_STORAGE_KEY = 'oi-monitor-auto-refresh'
@@ -95,6 +100,15 @@ export default function App() {
   const [alphaOnly, setAlphaOnly] = useState(false)
   const [symbolQuery, setSymbolQuery] = useState('')
   const [selected, setSelected] = useState<SymbolInsight | null>(null)
+  const [detailPendingSymbol, setDetailPendingSymbol] = useState<string | null>(
+    null,
+  )
+  const [detailOpenError, setDetailOpenError] = useState<string | null>(null)
+  const [variantScan, setVariantScan] = useState<VariantScanUiState | null>(
+    null,
+  )
+  const scanAbortRef = useRef<AbortController | null>(null)
+  const smDetailAbortRef = useRef<AbortController | null>(null)
 
   /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿 50% 变为上穿 50%） */
   const prevOiPctSnapshotRef = useRef<Map<string, number> | null>(null)
@@ -150,6 +164,99 @@ export default function App() {
       scheduleNext()
     }
   }, [topN, scheduleNext])
+
+  const runVariantScan = useCallback(async () => {
+    const ac = new AbortController()
+    scanAbortRef.current = ac
+    const depth = topN
+    setSelected(null)
+    setVariantScan({
+      phase: 'loading',
+      progress: `加载 Top ${depth} 榜单…`,
+      depth,
+    })
+    try {
+      const { insights } = await loadMarketInsights((msg) => {
+        setVariantScan((s) =>
+          s?.phase === 'loading' ? { ...s, progress: msg } : s,
+        )
+      }, depth)
+      if (ac.signal.aborted) return
+      setVariantScan({
+        phase: 'loading',
+        progress: '拉取 1h K 线并校验…',
+        depth,
+      })
+      const hits = await scanVariantSignalsForInsights(
+        insights,
+        (done, total) => {
+          setVariantScan({
+            phase: 'loading',
+            progress: `K 线 ${done}/${total}`,
+            depth,
+          })
+        },
+        ac.signal,
+      )
+      if (ac.signal.aborted) return
+      setVariantScan({ phase: 'done', progress: '', hits, depth })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      setVariantScan({
+        phase: 'error',
+        progress: '',
+        error: e instanceof Error ? e.message : String(e),
+        depth,
+      })
+    } finally {
+      if (scanAbortRef.current === ac) scanAbortRef.current = null
+    }
+  }, [topN])
+
+  function closeDetailDrawer() {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smDetailAbortRef.current?.abort()
+    smDetailAbortRef.current = null
+    setSelected(null)
+    setDetailPendingSymbol(null)
+    setDetailOpenError(null)
+    setVariantScan(null)
+  }
+
+  function onPickFromVariantScan(insight: SymbolInsight) {
+    setVariantScan(null)
+    setSelected(insight)
+  }
+
+  function openSmSymbolDetail(symbol: string) {
+    smDetailAbortRef.current?.abort()
+    const ac = new AbortController()
+    smDetailAbortRef.current = ac
+    setSelected(null)
+    setDetailOpenError(null)
+    setVariantScan(null)
+    setDetailPendingSymbol(symbol)
+    void loadSymbolInsight(symbol, ac.signal)
+      .then((ins) => {
+        if (ac.signal.aborted) return
+        setDetailPendingSymbol(null)
+        if (ins) {
+          setSelected(ins)
+        } else {
+          setDetailOpenError(
+            '无法加载该合约详情（可能未在永续列表或接口暂不可用）。',
+          )
+        }
+      })
+      .catch((e: unknown) => {
+        if (ac.signal.aborted) return
+        setDetailPendingSymbol(null)
+        setDetailOpenError(
+          e instanceof Error ? e.message : String(e),
+        )
+      })
+  }
 
   const loadSm = useCallback(async () => {
     setSmLoading(true)
@@ -237,7 +344,7 @@ export default function App() {
 
   function goPanel(next: Panel) {
     setPanel(next)
-    setSelected(null)
+    closeDetailDrawer()
   }
 
   function onRefreshClick() {
@@ -363,6 +470,15 @@ export default function App() {
                 />
                 仅 Alpha 标的
               </label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={oiLoading || variantScan?.phase === 'loading'}
+                onClick={() => void runVariantScan()}
+                title={`按当前榜单深度 Top ${topN}（与上方筛选一致）拉榜，逐合约拉 1h K 线后校验 V4A/V7/V8`}
+              >
+                扫描 V4A/V7/V8
+              </button>
               {typeof Notification !== 'undefined' &&
               Notification.permission === 'default' ? (
                 <button
@@ -492,7 +608,12 @@ export default function App() {
                 </div>
               </div>
             ) : null}
-            <SignalTable rows={tableRows} onSelect={setSelected} />
+            <SignalTable
+              rows={tableRows}
+              onSelect={
+                variantScan?.phase === 'loading' ? () => {} : setSelected
+              }
+            />
           </>
         ) : null}
 
@@ -501,7 +622,10 @@ export default function App() {
             {smRows.length > 0 && smFiltered.length === 0 ? (
               <p className="filter-empty muted small">当前筛选下无结果，请修改搜索词。</p>
             ) : null}
-            <SmartMoneyFuturesTable rows={smFiltered} />
+            <SmartMoneyFuturesTable
+              rows={smFiltered}
+              onOpenDetail={openSmSymbolDetail}
+            />
           </>
         ) : null}
       </main>
@@ -513,7 +637,14 @@ export default function App() {
         </p>
       </footer>
 
-      <DetailDrawer row={selected} onClose={() => setSelected(null)} />
+      <DetailDrawer
+        row={selected}
+        variantScan={variantScan}
+        pendingSymbol={detailPendingSymbol}
+        openDetailError={detailOpenError}
+        onClose={closeDetailDrawer}
+        onPickFromVariantScan={onPickFromVariantScan}
+      />
     </div>
   )
 }

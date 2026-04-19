@@ -17,7 +17,7 @@ import {
   type KlineCandle,
   type PremiumIndex,
 } from '../lib/api/futures'
-import { BinanceFuturesLink } from './BinanceLink'
+import { BinanceFuturesLink, BinanceLogoMark } from './BinanceLink'
 import { OiArea } from './OiChart'
 import { PriceLine } from './PriceChart'
 import { VolumeBars } from './VolumeBars'
@@ -43,6 +43,7 @@ import {
 import { formatCoinPrice } from '../lib/formatPrice'
 import type { VariantSignals } from '../lib/signals/variantSignals'
 import { computeVariantSignals } from '../lib/signals/variantSignals'
+import type { VariantScanUiState } from '../lib/scanVariantHits'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 import {
@@ -50,6 +51,8 @@ import {
   type SmartMoneyOverviewData,
 } from '../lib/api/smartMoneyFutures'
 import { SmartMoneyOverviewPanel } from './SmartMoneyOverviewPanel'
+import { DrawerAiPanel } from './DrawerAiPanel'
+import { isAiAnalysisEntryEnabled } from '../lib/featureFlags'
 
 function mergeRatio(
   g: SymbolInsight['global'],
@@ -121,10 +124,19 @@ type PremiumUi =
 
 export function DetailDrawer({
   row,
+  variantScan,
+  pendingSymbol,
+  openDetailError,
   onClose,
+  onPickFromVariantScan,
 }: {
   row: SymbolInsight | null
+  variantScan: VariantScanUiState | null
+  /** 单合约详情拉取中（如从聪明钱列表打开） */
+  pendingSymbol?: string | null
+  openDetailError?: string | null
   onClose: () => void
+  onPickFromVariantScan: (insight: SymbolInsight) => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -277,6 +289,167 @@ export function DetailDrawer({
     return computeVariantSignals(row, klines)
   }, [row, klines])
 
+  if (!row && variantScan) {
+    const scanDepth = variantScan.depth
+    return (
+      <div className="drawer-backdrop" onClick={onClose}>
+        <aside
+          className="drawer drawer-variant-scan"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label={`Top ${scanDepth} V4 V7 V8 扫描`}
+          aria-busy={variantScan.phase === 'loading'}
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>
+                Top {scanDepth} · V4 / V7 / V8
+              </h2>
+              <p className="muted small">
+                按 24h 成交额取前 {scanDepth}{' '}
+                个山寨永续（与工具栏「榜单深度」一致），逐合约拉 1h K 线与 OI
+                对齐后做启发式命中（与详情抽屉逻辑一致）。
+              </p>
+            </div>
+            <button type="button" className="ghost" onClick={onClose}>
+              关闭
+            </button>
+          </header>
+          {variantScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {variantScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {variantScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {variantScan.error}
+              </p>
+            </section>
+          ) : null}
+          {variantScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {variantScan.hits.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  Top {scanDepth}{' '}
+                  范围内暂无命中 V4A、V7 或 V8 任一条件的合约。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small" style={{ marginTop: 0 }}>
+                    共 {variantScan.hits.length}{' '}
+                    个合约至少命中一条；点击行打开详情。
+                  </p>
+                  <div className="drawer-constituents-table-wrap drawer-variant-scan-table-wrap">
+                    <table className="drawer-constituents-table drawer-variant-scan-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">合约</th>
+                          <th scope="col" className="num">
+                            V4A
+                          </th>
+                          <th scope="col" className="num">
+                            V7
+                          </th>
+                          <th scope="col" className="num">
+                            V8
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {variantScan.hits.map((h) => (
+                          <tr
+                            key={h.symbol}
+                            className="drawer-variant-scan-row"
+                            onClick={() => onPickFromVariantScan(h.insight)}
+                          >
+                            <td className="mono">
+                              {h.symbol.replace(/USDT$/i, '')}
+                            </td>
+                            <td className="num">
+                              {h.signals.v4a.hit ? '✓' : '—'}
+                            </td>
+                            <td className="num">
+                              {h.signals.v7.hit ? '✓' : '—'}
+                            </td>
+                            <td className="num">
+                              {h.signals.v8.hit ? '✓' : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    )
+  }
+
+  if (!row && openDetailError) {
+    return (
+      <div className="drawer-backdrop" onClick={onClose}>
+        <aside
+          className="drawer"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label="详情加载失败"
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>无法打开详情</h2>
+              <p className="banner err" style={{ margin: 0 }}>
+                {openDetailError}
+              </p>
+            </div>
+            <button type="button" className="ghost" onClick={onClose}>
+              关闭
+            </button>
+          </header>
+        </aside>
+      </div>
+    )
+  }
+
+  if (!row && pendingSymbol) {
+    return (
+      <div className="drawer-backdrop" onClick={onClose}>
+        <aside
+          className="drawer"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label="合约详情加载中"
+          aria-busy
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>{pendingSymbol}</h2>
+              <p className="muted small">正在加载 OI 结构与图表…</p>
+            </div>
+            <button type="button" className="ghost" onClick={onClose}>
+              关闭
+            </button>
+          </header>
+          <section className="drawer-section">
+            <div
+              className="sk sk-line"
+              style={{ height: 160, borderRadius: 8, marginTop: 0 }}
+            />
+          </section>
+        </aside>
+      </div>
+    )
+  }
+
   if (!row) return null
   const ratioData = mergeRatio(row.global, row.topAcc, row.topPos)
   const premiumMatch = premiumUi && premiumUi.sym === row.symbol
@@ -288,6 +461,10 @@ export function DetailDrawer({
     premiumMatch && premiumUi.kind === 'err' ? premiumUi.message : null
   const premiumLoading = !premiumMatch
   const constituentRows = sortedConstituents(constituents)
+  const smMarkPriceUsd = premium
+    ? parseFloat(premium.markPrice)
+    : NaN
+  const smMarkPriceOk = Number.isFinite(smMarkPriceUsd) && smMarkPriceUsd > 0
 
   return (
     <div className="drawer-backdrop" onClick={onClose}>
@@ -307,9 +484,18 @@ export function DetailDrawer({
               以下为公开市场数据聚合，非投资建议。
             </p>
           </div>
-          <button type="button" className="ghost" onClick={onClose}>
-            关闭
-          </button>
+          <div className="drawer-head-actions">
+            <BinanceFuturesLink
+              symbol={row.symbol}
+              className="drawer-bn-open"
+              title="在 Binance 合约打开"
+            >
+              <BinanceLogoMark />
+            </BinanceFuturesLink>
+            <button type="button" className="ghost" onClick={onClose}>
+              关闭
+            </button>
+          </div>
         </header>
         {!row.isAlpha ? (
           <section className="drawer-section">
@@ -372,7 +558,10 @@ export function DetailDrawer({
           ) : smOvErr ? (
             <p className="muted small">{smOvErr}</p>
           ) : smOverview ? (
-            <SmartMoneyOverviewPanel data={smOverview} />
+            <SmartMoneyOverviewPanel
+              data={smOverview}
+              markPriceUsd={smMarkPriceOk ? smMarkPriceUsd : undefined}
+            />
           ) : (
             <p className="muted small">暂无数据</p>
           )}
@@ -527,7 +716,6 @@ export function DetailDrawer({
               暂无指数成分数据（部分合约无第三方成分或未返回）。
             </p>
           ) : null}
-          <BinanceFuturesLink symbol={row.symbol}>在 Binance 合约打开</BinanceFuturesLink>
         </footer>
         {variantSignals &&
         (variantSignals.v4a.hit ||
@@ -541,6 +729,9 @@ export function DetailDrawer({
             </p>
             <VariantSignalsPanel signals={variantSignals} />
           </section>
+        ) : null}
+        {isAiAnalysisEntryEnabled() ? (
+          <DrawerAiPanel row={row} klines={klines} ratioSeries={ratioData} />
         ) : null}
       </aside>
     </div>

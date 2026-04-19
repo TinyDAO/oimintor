@@ -62,6 +62,64 @@ async function poolMap<T, R>(
 
 export type LoadProgress = (msg: string) => void
 
+/** 永续合约名规范为 UPPERCASE 且以 USDT 结尾 */
+export function normalizePerpSymbol(symbol: string): string {
+  const u = symbol.trim().toUpperCase()
+  return u.endsWith('USDT') ? u : `${u}USDT`
+}
+
+async function buildInsightForSymbol(
+  sym: string,
+  tmap: ReturnType<typeof tickerMap>,
+  alphaHits: Set<string>,
+  signal?: AbortSignal,
+): Promise<SymbolInsight | null> {
+  const ticker = tmap.get(sym)
+  if (!ticker) return null
+  if (signal?.aborted) return null
+  try {
+    const [oiHist, gl, ta, tp, dailyK] = await Promise.all([
+      fetchOpenInterestHist(sym, PERIOD, OI_LIMIT),
+      fetchGlobalLongShort(sym, PERIOD, RATIO_LIMIT),
+      fetchTopLongShortAccount(sym, PERIOD, RATIO_LIMIT),
+      fetchTopLongShortPosition(sym, PERIOD, RATIO_LIMIT),
+      fetchKlines(sym, '1d', DAILY_K_LIMIT),
+    ])
+    if (signal?.aborted) return null
+    return buildInsight(
+      sym,
+      ticker,
+      dailyK,
+      oiHist,
+      gl,
+      ta,
+      tp,
+      alphaHits.has(sym),
+    )
+  } catch {
+    return null
+  }
+}
+
+/** 拉取单个合约的 OI 结构洞察（与榜单同源计算），用于聪明钱列表等入口打开详情抽屉 */
+export async function loadSymbolInsight(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<SymbolInsight | null> {
+  const sym = normalizePerpSymbol(symbol)
+  const [info, tickers, alphaList] = await Promise.all([
+    fetchExchangeInfo(),
+    fetchTicker24hAll(),
+    fetchAlphaTokenListCached().catch(() => []),
+  ])
+  if (signal?.aborted) return null
+  const perp = perpetualUsdtSymbols(info.symbols)
+  if (!perp.has(sym)) return null
+  const tmap = tickerMap(tickers)
+  const alphaHits = futuresSymbolsFromAlpha(alphaList, perp)
+  return buildInsightForSymbol(sym, tmap, alphaHits, signal)
+}
+
 export async function loadMarketInsights(
   onProgress?: LoadProgress,
   topNInput: number = DEFAULT_TOP_N,
@@ -90,31 +148,9 @@ export async function loadMarketInsights(
   }
 
   for (const batch of chunks) {
-    const part = await poolMap(batch, 6, async (sym) => {
-      const ticker = tmap.get(sym)
-      if (!ticker) return null
-      try {
-        const [oiHist, gl, ta, tp, dailyK] = await Promise.all([
-          fetchOpenInterestHist(sym, PERIOD, OI_LIMIT),
-          fetchGlobalLongShort(sym, PERIOD, RATIO_LIMIT),
-          fetchTopLongShortAccount(sym, PERIOD, RATIO_LIMIT),
-          fetchTopLongShortPosition(sym, PERIOD, RATIO_LIMIT),
-          fetchKlines(sym, '1d', DAILY_K_LIMIT),
-        ])
-        return buildInsight(
-          sym,
-          ticker,
-          dailyK,
-          oiHist,
-          gl,
-          ta,
-          tp,
-          alphaHits.has(sym),
-        )
-      } catch {
-        return null
-      }
-    })
+    const part = await poolMap(batch, 6, async (sym) =>
+      buildInsightForSymbol(sym, tmap, alphaHits),
+    )
     for (const p of part) {
       if (p) insights.push(p)
     }

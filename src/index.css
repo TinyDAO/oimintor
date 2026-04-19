@@ -606,6 +606,34 @@ body::before {
   border-bottom: 1px solid var(--border);
 }
 
+.drawer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.drawer-bn-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 8px;
+  color: #f0b90b;
+  line-height: 0;
+}
+
+.drawer-bn-open:hover {
+  background: color-mix(in srgb, #f0b90b 16%, transparent);
+  text-decoration: none;
+}
+
+.drawer-bn-open svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
 .drawer-head h2 {
   font-family: var(--font-display);
   margin: 0 0 0.2rem;
@@ -667,6 +695,99 @@ body::before {
   font-size: 0.92rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.sm-overview-pnl {
+  margin-bottom: 0.65rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel2));
+}
+
+.sm-overview-pnl-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.sm-overview-pnl-mark {
+  font-weight: 500;
+}
+
+.sm-overview-pnl-wait {
+  margin: 0;
+  line-height: 1.4;
+  font-size: 0.72rem;
+}
+
+.sm-overview-pnl-dl {
+  display: grid;
+  gap: 0.28rem;
+  margin: 0;
+}
+
+.sm-overview-pnl-dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.76rem;
+}
+
+.sm-overview-pnl-dl dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.sm-overview-pnl-dl dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+.sm-overview-pnl-subtotal {
+  padding-top: 0.15rem;
+  margin-top: 0.1rem;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.sm-overview-pnl-subtotal dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sm-overview-pnl-net {
+  padding-top: 0.35rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid var(--border);
+}
+
+.sm-overview-pnl-net dt {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sm-overview-pnl-net dd {
+  font-size: 0.88rem;
+}
+
+.sm-overview-pnl-val-up {
+  color: #86efac;
+}
+
+.sm-overview-pnl-val-down {
+  color: #fecaca;
+}
+
+.sm-overview-pnl-val-flat {
+  color: var(--muted);
 }
 
 .sm-overview-bar-wrap {
@@ -848,6 +969,18 @@ body::before {
   margin: 0.55rem 0 0;
   line-height: 1.35;
   font-size: 0.72rem;
+}
+
+.drawer-variant-scan-table-wrap {
+  margin-top: 10px;
+}
+
+.drawer-variant-scan-table tbody tr.drawer-variant-scan-row {
+  cursor: pointer;
+}
+
+.drawer-variant-scan-table tbody tr.drawer-variant-scan-row:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .drawer-variant-bottom {
@@ -1414,6 +1547,14 @@ a.alpha-link:hover {
   padding-top: 0.35rem;
 }
 
+.sm-futures-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
 .sm-side {
   font-weight: 700;
   font-size: 0.82rem;
@@ -1470,4 +1611,51 @@ a.alpha-link:hover {
   .sm-futures-note {
     font-size: 0.72rem;
   }
+}
+
+/* 抽屉内 AI 分析 */
+.drawer-ai-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  margin-top: 0.25rem;
+}
+
+.drawer-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.drawer-ai-primary {
+  font-weight: 600;
+}
+
+.drawer-ai-skel {
+  min-height: 120px;
+}
+
+.drawer-ai-output-wrap {
+  margin-top: 12px;
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.drawer-ai-output {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text);
+}
+
+.drawer-ai-err {
+  font-size: 0.88rem;
 }
