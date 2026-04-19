@@ -574,6 +574,10 @@ body::before {
   animation: fade 0.2s ease;
 }
 
+.drawer-backdrop.drawer-stack-top {
+  z-index: 50;
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -969,6 +973,11 @@ body::before {
   margin: 0.55rem 0 0;
   line-height: 1.35;
   font-size: 0.72rem;
+}
+
+.drawer-variant-cache-line {
+  margin-top: 0.45rem;
+  margin-bottom: 0;
 }
 
 .drawer-variant-scan-table-wrap {

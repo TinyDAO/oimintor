@@ -122,21 +122,38 @@ type PremiumUi =
     }
   | { sym: string; kind: 'err'; message: string }
 
+function formatVariantScanSnapshot(ms: number): string {
+  return new Date(ms).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function DetailDrawer({
   row,
   variantScan,
   pendingSymbol,
   openDetailError,
-  onClose,
+  onCloseAllDrawers,
+  onCloseSymbolDrawer,
   onPickFromVariantScan,
+  onRefreshVariantScan,
 }: {
   row: SymbolInsight | null
   variantScan: VariantScanUiState | null
   /** 单合约详情拉取中（如从聪明钱列表打开） */
   pendingSymbol?: string | null
   openDetailError?: string | null
-  onClose: () => void
+  /** 关闭全部（含扫描抽屉） */
+  onCloseAllDrawers: () => void
+  /** 仅关闭上层合约详情 / 加载 / 错误，保留扫描抽屉 */
+  onCloseSymbolDrawer: () => void
   onPickFromVariantScan: (insight: SymbolInsight) => void
+  /** 强制重新拉榜扫描（忽略缓存） */
+  onRefreshVariantScan: () => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -289,31 +306,66 @@ export function DetailDrawer({
     return computeVariantSignals(row, klines)
   }, [row, klines])
 
-  if (!row && variantScan) {
-    const scanDepth = variantScan.depth
-    return (
-      <div className="drawer-backdrop" onClick={onClose}>
+  const ratioData = useMemo(() => {
+    if (!row) return []
+    return mergeRatio(row.global, row.topAcc, row.topPos)
+  }, [row])
+
+  const hasScan = Boolean(variantScan)
+  const hasTopOverlay = Boolean(
+    row || pendingSymbol || openDetailError,
+  )
+  if (!hasScan && !hasTopOverlay) return null
+
+  const variantScanPanel =
+    variantScan ? (
+      <div
+        className="drawer-backdrop drawer-stack-base"
+        onClick={onCloseAllDrawers}
+      >
         <aside
           className="drawer drawer-variant-scan"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
-          aria-label={`Top ${scanDepth} V4 V7 V8 扫描`}
+          aria-label={`Top ${variantScan.depth} V4 V7 V8 扫描`}
           aria-busy={variantScan.phase === 'loading'}
         >
           <header className="drawer-head">
             <div>
               <h2>
-                Top {scanDepth} · V4 / V7 / V8
+                Top {variantScan.depth} · V4A / V7 / V8
               </h2>
               <p className="muted small">
-                按 24h 成交额取前 {scanDepth}{' '}
+                按 24h 成交额取前 {variantScan.depth}{' '}
                 个山寨永续（与工具栏「榜单深度」一致），逐合约拉 1h K 线与 OI
-                对齐后做启发式命中（与详情抽屉逻辑一致）。
+                对齐后做启发式命中
               </p>
+              {variantScan.phase === 'done' &&
+              variantScan.cachedAtMs != null ? (
+                <p className="muted small drawer-variant-cache-line">
+                  {variantScan.fromCache
+                    ? `本地缓存 · ${formatVariantScanSnapshot(variantScan.cachedAtMs)} · 24h 内有效`
+                    : `完成时间 · ${formatVariantScanSnapshot(variantScan.cachedAtMs)}`}
+                </p>
+              ) : null}
             </div>
-            <button type="button" className="ghost" onClick={onClose}>
-              关闭
-            </button>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={variantScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshVariantScan()
+                }}
+                title="忽略缓存，重新拉榜并扫描"
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
           </header>
           {variantScan.phase === 'loading' ? (
             <section className="drawer-section">
@@ -337,14 +389,14 @@ export function DetailDrawer({
             <section className="drawer-section">
               {variantScan.hits.length === 0 ? (
                 <p className="muted small" style={{ marginTop: 0 }}>
-                  Top {scanDepth}{' '}
+                  Top {variantScan.depth}{' '}
                   范围内暂无命中 V4A、V7 或 V8 任一条件的合约。
                 </p>
               ) : (
                 <>
                   <p className="muted small" style={{ marginTop: 0 }}>
                     共 {variantScan.hits.length}{' '}
-                    个合约至少命中一条；点击行打开详情。
+                    个合约至少命中一条；点击行叠开合约详情（列表保留）。
                   </p>
                   <div className="drawer-constituents-table-wrap drawer-variant-scan-table-wrap">
                     <table className="drawer-constituents-table drawer-variant-scan-table">
@@ -392,12 +444,14 @@ export function DetailDrawer({
           ) : null}
         </aside>
       </div>
-    )
-  }
+    ) : null
 
-  if (!row && openDetailError) {
-    return (
-      <div className="drawer-backdrop" onClick={onClose}>
+  const errorOverlay =
+    openDetailError && !row ? (
+      <div
+        className="drawer-backdrop drawer-stack-top"
+        onClick={onCloseSymbolDrawer}
+      >
         <aside
           className="drawer"
           onClick={(e) => e.stopPropagation()}
@@ -411,18 +465,20 @@ export function DetailDrawer({
                 {openDetailError}
               </p>
             </div>
-            <button type="button" className="ghost" onClick={onClose}>
+            <button type="button" className="ghost" onClick={onCloseSymbolDrawer}>
               关闭
             </button>
           </header>
         </aside>
       </div>
-    )
-  }
+    ) : null
 
-  if (!row && pendingSymbol) {
-    return (
-      <div className="drawer-backdrop" onClick={onClose}>
+  const pendingOverlay =
+    pendingSymbol && !row && !openDetailError ? (
+      <div
+        className="drawer-backdrop drawer-stack-top"
+        onClick={onCloseSymbolDrawer}
+      >
         <aside
           className="drawer"
           onClick={(e) => e.stopPropagation()}
@@ -435,7 +491,7 @@ export function DetailDrawer({
               <h2>{pendingSymbol}</h2>
               <p className="muted small">正在加载 OI 结构与图表…</p>
             </div>
-            <button type="button" className="ghost" onClick={onClose}>
+            <button type="button" className="ghost" onClick={onCloseSymbolDrawer}>
               关闭
             </button>
           </header>
@@ -447,12 +503,10 @@ export function DetailDrawer({
           </section>
         </aside>
       </div>
-    )
-  }
+    ) : null
 
-  if (!row) return null
-  const ratioData = mergeRatio(row.global, row.topAcc, row.topPos)
-  const premiumMatch = premiumUi && premiumUi.sym === row.symbol
+  const premiumMatch =
+    row && premiumUi && premiumUi.sym === row.symbol
   const premium =
     premiumMatch && premiumUi.kind === 'ok' ? premiumUi.data : null
   const constituents =
@@ -466,8 +520,12 @@ export function DetailDrawer({
     : NaN
   const smMarkPriceOk = Number.isFinite(smMarkPriceUsd) && smMarkPriceUsd > 0
 
-  return (
-    <div className="drawer-backdrop" onClick={onClose}>
+  const mainDetailDrawer =
+    row ? (
+      <div
+        className="drawer-backdrop drawer-stack-top"
+        onClick={onCloseSymbolDrawer}
+      >
       <aside
         className="drawer"
         onClick={(e) => e.stopPropagation()}
@@ -492,7 +550,7 @@ export function DetailDrawer({
             >
               <BinanceLogoMark />
             </BinanceFuturesLink>
-            <button type="button" className="ghost" onClick={onClose}>
+            <button type="button" className="ghost" onClick={onCloseSymbolDrawer}>
               关闭
             </button>
           </div>
@@ -735,5 +793,14 @@ export function DetailDrawer({
         ) : null}
       </aside>
     </div>
+    ) : null
+
+  return (
+    <>
+      {variantScanPanel}
+      {errorOverlay}
+      {pendingOverlay}
+      {mainDetailDrawer}
+    </>
   )
 }

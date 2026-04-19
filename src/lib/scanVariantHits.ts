@@ -15,7 +15,16 @@ export type VariantScanHit = {
 export type VariantScanUiState =
   | { phase: 'loading'; progress: string; depth: number }
   | { phase: 'error'; progress: string; error: string; depth: number }
-  | { phase: 'done'; progress: string; hits: VariantScanHit[]; depth: number }
+  | {
+      phase: 'done'
+      progress: string
+      hits: VariantScanHit[]
+      depth: number
+      /** 本条结果快照时间（Unix ms），缓存命中或扫描完成时写入 */
+      cachedAtMs?: number
+      /** 本次打开是否未发请求、直接来自本地缓存 */
+      fromCache?: boolean
+    }
 
 async function poolMap<T, R>(
   items: T[],

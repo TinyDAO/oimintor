@@ -28,6 +28,10 @@ import {
   scanVariantSignalsForInsights,
   type VariantScanUiState,
 } from './lib/scanVariantHits'
+import {
+  readVariantScanCacheIfValid,
+  writeVariantScanCache,
+} from './lib/variantScanCache'
 
 const TOP_N_STORAGE_KEY = 'oi-monitor-top-n'
 const AUTO_REFRESH_STORAGE_KEY = 'oi-monitor-auto-refresh'
@@ -165,7 +169,7 @@ export default function App() {
     }
   }, [topN, scheduleNext])
 
-  const runVariantScan = useCallback(async () => {
+  const runVariantScanNetwork = useCallback(async () => {
     const ac = new AbortController()
     scanAbortRef.current = ac
     const depth = topN
@@ -199,7 +203,16 @@ export default function App() {
         ac.signal,
       )
       if (ac.signal.aborted) return
-      setVariantScan({ phase: 'done', progress: '', hits, depth })
+      const now = Date.now()
+      writeVariantScanCache(depth, hits)
+      setVariantScan({
+        phase: 'done',
+        progress: '',
+        hits,
+        depth,
+        cachedAtMs: now,
+        fromCache: false,
+      })
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
       setVariantScan({
@@ -213,6 +226,28 @@ export default function App() {
     }
   }, [topN])
 
+  const openVariantScanDrawer = useCallback(() => {
+    const depth = topN
+    const cached = readVariantScanCacheIfValid(depth)
+    if (cached) {
+      setSelected(null)
+      setVariantScan({
+        phase: 'done',
+        progress: '',
+        hits: cached.hits,
+        depth,
+        cachedAtMs: cached.cachedAt,
+        fromCache: true,
+      })
+      return
+    }
+    void runVariantScanNetwork()
+  }, [topN, runVariantScanNetwork])
+
+  const refreshVariantScan = useCallback(() => {
+    void runVariantScanNetwork()
+  }, [runVariantScanNetwork])
+
   function closeDetailDrawer() {
     scanAbortRef.current?.abort()
     scanAbortRef.current = null
@@ -224,8 +259,16 @@ export default function App() {
     setVariantScan(null)
   }
 
+  /** 仅关闭合约详情 / 加载中 / 错误层；保留 V4/V7/V8 扫描抽屉 */
+  function closeSymbolDrawer() {
+    smDetailAbortRef.current?.abort()
+    smDetailAbortRef.current = null
+    setSelected(null)
+    setDetailPendingSymbol(null)
+    setDetailOpenError(null)
+  }
+
   function onPickFromVariantScan(insight: SymbolInsight) {
-    setVariantScan(null)
     setSelected(insight)
   }
 
@@ -474,8 +517,8 @@ export default function App() {
                 type="button"
                 className="btn btn-ghost"
                 disabled={oiLoading || variantScan?.phase === 'loading'}
-                onClick={() => void runVariantScan()}
-                title={`按当前榜单深度 Top ${topN}（与上方筛选一致）拉榜，逐合约拉 1h K 线后校验 V4A/V7/V8`}
+                onClick={() => void openVariantScanDrawer()}
+                title={`按当前榜单深度 Top ${topN} 打开扫描；若有 24h 内缓存则直接展示，否则拉榜并校验 V4A/V7/V8`}
               >
                 扫描 V4A/V7/V8
               </button>
@@ -642,8 +685,10 @@ export default function App() {
         variantScan={variantScan}
         pendingSymbol={detailPendingSymbol}
         openDetailError={detailOpenError}
-        onClose={closeDetailDrawer}
+        onCloseAllDrawers={closeDetailDrawer}
+        onCloseSymbolDrawer={closeSymbolDrawer}
         onPickFromVariantScan={onPickFromVariantScan}
+        onRefreshVariantScan={refreshVariantScan}
       />
     </div>
   )
