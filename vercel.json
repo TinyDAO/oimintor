@@ -2,6 +2,22 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/fapi/(.*)",
+      "destination": "https://fapi.binance.com/$1"
+    },
+    {
+      "source": "/api/bapi/(.*)",
+      "destination": "https://www.binance.com/$1"
+    },
+    {
+      "source": "/api/web3/(.*)",
+      "destination": "https://web3.binance.com/$1"
+    },
+    {
+      "source": "/api/spot/(.*)",
+      "destination": "https://api.binance.com/$1"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
