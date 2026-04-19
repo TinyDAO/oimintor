@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KlineCandle } from '../lib/api/futures'
-import { fetchChatCompletion } from '../lib/api/aiChat'
+import { fetchTraderAiAnalysis } from '../lib/api/aiChat'
 import {
   buildTraderAnalysisPayload,
-  TRADER_AI_SYSTEM_PROMPT,
   type MergedRatioPoint,
 } from '../lib/ai/buildTraderAnalysisPayload'
 import type { SymbolInsight } from '../lib/signals/compute'
@@ -36,14 +35,7 @@ export function DrawerAiPanel({
     setErr(null)
     try {
       const payload = buildTraderAnalysisPayload(row, klines, ratioSeries)
-      const userContent = JSON.stringify(payload)
-      const out = await fetchChatCompletion(
-        [
-          { role: 'system', content: TRADER_AI_SYSTEM_PROMPT },
-          { role: 'user', content: userContent },
-        ],
-        ac.signal,
-      )
+      const out = await fetchTraderAiAnalysis(payload, ac.signal)
       if (ac.signal.aborted) return
       setText(out)
       setPhase('done')
@@ -66,8 +58,8 @@ export function DrawerAiPanel({
     <section className="drawer-section drawer-ai-panel" aria-label="AI 交易分析">
       <h3>AI 交易视角</h3>
       <p className="muted small" style={{ marginTop: 0 }}>
-        点击下方按钮将本页 1h K 线（价量）、OI 与三轨多空比等结构化数据发送至配置的
-        OpenAI 兼容接口，由模型从专业交易员视角解读动能与风险。输出仅供学习，不构成投资建议。
+        点击下方按钮将本页 1h K 线（价量）、OI 与三轨多空比等结构化数据发往服务端；
+        服务端组装提示词后调用模型，从专业交易员视角解读动能与风险。输出仅供学习，不构成投资建议。
       </p>
       <div className="drawer-ai-actions">
         <button

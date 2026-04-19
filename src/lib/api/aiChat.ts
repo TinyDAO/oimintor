@@ -1,9 +1,3 @@
-/** 与 OpenAI Chat Completions 兼容的 message 条目 */
-export type ChatMessage = {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
-
 const DEFAULT_PATH = '/api/ai/chat'
 
 function chatPath(): string {
@@ -17,19 +11,17 @@ export type ChatCompletionResponse = {
 }
 
 /**
- * 调用 OpenAI 兼容 Chat Completions（经开发环境 Vite 代理或自建网关，避免密钥进前端）。
+ * 将市场数据 POST 至服务端；系统提示词在服务端组装后再调 OpenAI 兼容接口。
  */
-export async function fetchChatCompletion(
-  messages: ChatMessage[],
+export async function fetchTraderAiAnalysis(
+  marketPayload: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<string> {
   const path = chatPath()
   const r = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages,
-    }),
+    body: JSON.stringify({ marketPayload }),
     signal,
   })
   const text = await r.text()

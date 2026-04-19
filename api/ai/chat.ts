@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { buildTraderAiMessagesFromMarketPayload } from '../lib/traderAiMessages'
 
 /**
  * OpenAI 兼容 Chat Completions 代理。
  * 部署到 Vercel 后路径为 POST /api/ai/chat
+ * 请求体：{ marketPayload, model? } — 系统提示词在服务端组装。
  * 环境变量：AI_API_KEY（必填）、AI_API_BASE_URL、AI_MODEL
  */
 export default async function handler(
@@ -13,21 +15,26 @@ export default async function handler(
     return res.status(405).json({ error: { message: 'Method not allowed' } })
   }
 
-  let incoming: { messages?: unknown; model?: string }
+  let incoming: { marketPayload?: unknown; model?: string }
   try {
     incoming =
       typeof req.body === 'string'
-        ? (JSON.parse(req.body) as { messages?: unknown; model?: string })
-        : (req.body as { messages?: unknown; model?: string })
+        ? (JSON.parse(req.body) as { marketPayload?: unknown; model?: string })
+        : (req.body as { marketPayload?: unknown; model?: string })
   } catch {
     return res.status(400).json({ error: { message: 'Invalid JSON body' } })
   }
 
-  if (!incoming.messages || !Array.isArray(incoming.messages)) {
+  if (incoming.marketPayload === undefined) {
     return res.status(400).json({
-      error: { message: 'expected messages: ChatMessage[]' },
+      error: {
+        message:
+          'expected marketPayload: client sends market JSON only; prompts are built server-side',
+      },
     })
   }
+
+  const messages = buildTraderAiMessagesFromMarketPayload(incoming.marketPayload)
 
   const base = (
     process.env.AI_API_BASE_URL ?? 'https://api.openai.com/v1'
@@ -53,7 +60,7 @@ export default async function handler(
       },
       body: JSON.stringify({
         model,
-        messages: incoming.messages,
+        messages,
         temperature: 0.35,
       }),
     })

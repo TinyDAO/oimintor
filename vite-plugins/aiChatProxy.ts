@@ -1,5 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import type { Plugin, PreviewServer, ViteDevServer } from 'vite'
+import { buildTraderAiMessagesFromMarketPayload } from '../api/lib/traderAiMessages'
 
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
@@ -21,13 +22,26 @@ function attachAiProxy(
     }
     try {
       const raw = await readBody(req as IncomingMessage)
-      const incoming = JSON.parse(raw) as { messages?: unknown; model?: string }
-      if (!incoming.messages || !Array.isArray(incoming.messages)) {
+      const incoming = JSON.parse(raw) as {
+        marketPayload?: unknown
+        model?: string
+      }
+      if (incoming.marketPayload === undefined) {
         res.statusCode = 400
         res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({ error: { message: 'expected messages: ChatMessage[]' } }))
+        res.end(
+          JSON.stringify({
+            error: {
+              message:
+                'expected marketPayload: 客户端只上传市场 JSON，系统提示词由服务端组装',
+            },
+          }),
+        )
         return
       }
+      const messages = buildTraderAiMessagesFromMarketPayload(
+        incoming.marketPayload,
+      )
       const base = (env.AI_API_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '')
       const key = env.AI_API_KEY ?? ''
       if (!key) {
@@ -52,7 +66,7 @@ function attachAiProxy(
         },
         body: JSON.stringify({
           model,
-          messages: incoming.messages,
+          messages,
           temperature: 0.35,
         }),
       })
