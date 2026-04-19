@@ -102,17 +102,13 @@ export function SmartMoneyFuturesTable({
 
   return (
     <div className="table-wrap sm-futures-wrap">
-      <p className="muted small sm-futures-note">
-        合约侧聪明钱口径：按时间段内多/空名义与人数聚合；净方向与 OI 结构榜相互独立，请交叉验证。
-      </p>
       <table className="sig-table sm-futures-table">
         <thead>
           <tr>
             <Th k="symbol">合约</Th>
             <Th k="side">净方向</Th>
-            <Th k="absNet">|净名义|</Th>
+            <Th k="absNet">净名义</Th>
             <Th k="netPct">成交量占比</Th>
-            <th className="th-no-sort">净名义</th>
             <th className="th-no-sort">多名义</th>
             <th className="th-no-sort">空名义</th>
             <th className="th-no-sort">多·人数</th>
@@ -143,9 +139,6 @@ export function SmartMoneyFuturesTable({
                 </td>
                 <td className="mono num">{fmtUsd(Math.abs(r.netNotional))}</td>
                 <td className="mono num">{netNotionalPct(r).toFixed(2)}%</td>
-                <td className={`mono num sm-net sm-net--${r.side.toLowerCase()}`}>
-                  {fmtUsd(r.netNotional)}
-                </td>
                 <td className="mono num muted-soft">{fmtUsd(r.longNotional)}</td>
                 <td className="mono num muted-soft">{fmtUsd(r.shortNotional)}</td>
                 <td className="mono num sm-people">

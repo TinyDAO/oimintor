@@ -198,12 +198,23 @@ export function SmartMoneyOverviewPanel({
               </dd>
             </div>
           </dl>
-        ) : (
+        ) : null}
+        {markOk &&
+        upl &&
+        longUplTotal < 0 &&
+        shortUplTotal < 0 &&
+        longEntry > markPriceUsd! &&
+        shortEntry < markPriceUsd! ? (
+          <p className="muted small sm-overview-pnl-note">
+            标记价介于多空加权均价之间时，聪明钱多头与空头可同时为浮亏：多头开仓整体偏高、空头开仓整体偏低，现价落在中间则两侧相对入场价都吃亏。全市场近似零和，此处未计入对手盘（非聪明钱）。
+          </p>
+        ) : null}
+        {!markOk || !upl ? (
           <p className="muted small sm-overview-pnl-wait">
             接口不直接返回盈亏金额；指数区标记价就绪后，此处用「持仓量 ×（标记价 −
             分桶均价）」估算多头，空头方向相反。
           </p>
-        )}
+        ) : null}
       </div>
 
       <div className="sm-overview-bar-wrap" aria-hidden>
@@ -329,7 +340,7 @@ export function SmartMoneyOverviewPanel({
       </div>
 
       <p className="muted small sm-overview-foot">
-        数据来源 Binance 合约聪明钱公开接口。盈亏金额为按标记价与分桶持仓均价的估算，非官方逐笔汇总；普通/大户为接口分桶。
+        数据来源 Binance 合约聪明钱公开接口。盈亏金额为按标记价与分桶持仓均价的估算，非官方逐笔汇总；普通/大户为接口分桶。聪明钱仅为市场子集，多空两侧估算盈亏之和不必为零（对手多为非聪明钱）。
       </p>
     </div>
   )

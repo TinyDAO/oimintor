@@ -730,6 +730,12 @@ body::before {
   font-size: 0.72rem;
 }
 
+.sm-overview-pnl-note {
+  margin: 0.35rem 0 0;
+  line-height: 1.45;
+  font-size: 0.72rem;
+}
+
 .sm-overview-pnl-dl {
   display: grid;
   gap: 0.28rem;

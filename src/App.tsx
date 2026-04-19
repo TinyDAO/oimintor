@@ -32,6 +32,10 @@ import {
   readVariantScanCacheIfValid,
   writeVariantScanCache,
 } from './lib/variantScanCache'
+import {
+  buildSmDirectionScanHits,
+  type SmDirectionScanUiState,
+} from './lib/smDirectionScan'
 
 const TOP_N_STORAGE_KEY = 'oi-monitor-top-n'
 const AUTO_REFRESH_STORAGE_KEY = 'oi-monitor-auto-refresh'
@@ -111,7 +115,10 @@ export default function App() {
   const [variantScan, setVariantScan] = useState<VariantScanUiState | null>(
     null,
   )
+  const [smDirectionScan, setSmDirectionScan] =
+    useState<SmDirectionScanUiState | null>(null)
   const scanAbortRef = useRef<AbortController | null>(null)
+  const smScanAbortRef = useRef<AbortController | null>(null)
   const smDetailAbortRef = useRef<AbortController | null>(null)
 
   /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿 50% 变为上穿 50%） */
@@ -170,10 +177,13 @@ export default function App() {
   }, [topN, scheduleNext])
 
   const runVariantScanNetwork = useCallback(async () => {
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
     const ac = new AbortController()
     scanAbortRef.current = ac
     const depth = topN
     setSelected(null)
+    setSmDirectionScan(null)
     setVariantScan({
       phase: 'loading',
       progress: `加载 Top ${depth} 榜单…`,
@@ -226,11 +236,55 @@ export default function App() {
     }
   }, [topN])
 
+  const runSmDirectionScan = useCallback(async () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    const ac = new AbortController()
+    smScanAbortRef.current = ac
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan({ phase: 'loading', progress: '拉取 24h 与 1h 聪明钱列表…' })
+    try {
+      const [rows24h, rows1h] = await Promise.all([
+        fetchSmartMoneyFuturesSignals('24h', ac.signal),
+        fetchSmartMoneyFuturesSignals('1h', ac.signal),
+      ])
+      if (ac.signal.aborted) return
+      const hits = buildSmDirectionScanHits(rows24h, rows1h)
+      setSmDirectionScan({
+        phase: 'done',
+        progress: '',
+        hits,
+        doneAtMs: Date.now(),
+      })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      setSmDirectionScan({
+        phase: 'error',
+        progress: '',
+        error: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      if (smScanAbortRef.current === ac) smScanAbortRef.current = null
+    }
+  }, [])
+
+  const openSmDirectionScanDrawer = useCallback(() => {
+    void runSmDirectionScan()
+  }, [runSmDirectionScan])
+
+  const refreshSmDirectionScan = useCallback(() => {
+    void runSmDirectionScan()
+  }, [runSmDirectionScan])
+
   const openVariantScanDrawer = useCallback(() => {
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
     const depth = topN
     const cached = readVariantScanCacheIfValid(depth)
     if (cached) {
       setSelected(null)
+      setSmDirectionScan(null)
       setVariantScan({
         phase: 'done',
         progress: '',
@@ -251,12 +305,15 @@ export default function App() {
   function closeDetailDrawer() {
     scanAbortRef.current?.abort()
     scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
     smDetailAbortRef.current?.abort()
     smDetailAbortRef.current = null
     setSelected(null)
     setDetailPendingSymbol(null)
     setDetailOpenError(null)
     setVariantScan(null)
+    setSmDirectionScan(null)
   }
 
   /** 仅关闭合约详情 / 加载中 / 错误层；保留 V4/V7/V8 扫描抽屉 */
@@ -272,13 +329,19 @@ export default function App() {
     setSelected(insight)
   }
 
-  function openSmSymbolDetail(symbol: string) {
+  function openSmSymbolDetail(
+    symbol: string,
+    clearBackgroundScans: boolean = true,
+  ) {
     smDetailAbortRef.current?.abort()
     const ac = new AbortController()
     smDetailAbortRef.current = ac
     setSelected(null)
     setDetailOpenError(null)
-    setVariantScan(null)
+    if (clearBackgroundScans) {
+      setVariantScan(null)
+      setSmDirectionScan(null)
+    }
     setDetailPendingSymbol(symbol)
     void loadSymbolInsight(symbol, ac.signal)
       .then((ins) => {
@@ -534,36 +597,47 @@ export default function App() {
               ) : null}
             </>
           ) : (
-            <label className="toolbar-field">
-              <span className="toolbar-label">统计周期</span>
-              <select
-                className="toolbar-select"
-                value={smRange}
-                disabled={smLoading}
-                onChange={(e) => {
-                  const v = e.target.value as SmartMoneyTimeRange
-                  setSmRange(v)
-                  try {
-                    localStorage.setItem(SM_RANGE_STORAGE_KEY, v)
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                aria-label="聪明钱信号时间范围"
+            <>
+              <label className="toolbar-field">
+                <span className="toolbar-label">统计周期</span>
+                <select
+                  className="toolbar-select"
+                  value={smRange}
+                  disabled={smLoading}
+                  onChange={(e) => {
+                    const v = e.target.value as SmartMoneyTimeRange
+                    setSmRange(v)
+                    try {
+                      localStorage.setItem(SM_RANGE_STORAGE_KEY, v)
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  aria-label="聪明钱信号时间范围"
+                >
+                  {SMART_MONEY_TIME_RANGES.map((r) => (
+                    <option key={r} value={r}>
+                      {r === '30m'
+                        ? '30 分钟'
+                        : r === '1h'
+                          ? '1 小时'
+                          : r === '24h'
+                            ? '24 小时'
+                            : '7 日'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={smLoading || smDirectionScan?.phase === 'loading'}
+                onClick={() => void openSmDirectionScanDrawer()}
+                title="拉取 24h 与 1h 聪明钱列表，筛出净方向相反合约，按两档净名义差排序"
               >
-                {SMART_MONEY_TIME_RANGES.map((r) => (
-                  <option key={r} value={r}>
-                    {r === '30m'
-                      ? '30 分钟'
-                      : r === '1h'
-                        ? '1 小时'
-                        : r === '24h'
-                          ? '24 小时'
-                          : '7 日'}
-                  </option>
-                ))}
-              </select>
-            </label>
+                净方向扫描
+              </button>
+            </>
           )}
 
           <input
@@ -683,12 +757,15 @@ export default function App() {
       <DetailDrawer
         row={selected}
         variantScan={variantScan}
+        smDirectionScan={smDirectionScan}
         pendingSymbol={detailPendingSymbol}
         openDetailError={detailOpenError}
         onCloseAllDrawers={closeDetailDrawer}
         onCloseSymbolDrawer={closeSymbolDrawer}
         onPickFromVariantScan={onPickFromVariantScan}
         onRefreshVariantScan={refreshVariantScan}
+        onPickFromSmDirectionScan={(sym) => openSmSymbolDetail(sym, false)}
+        onRefreshSmDirectionScan={refreshSmDirectionScan}
       />
     </div>
   )

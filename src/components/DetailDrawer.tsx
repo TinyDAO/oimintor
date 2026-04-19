@@ -44,6 +44,7 @@ import { formatCoinPrice } from '../lib/formatPrice'
 import type { VariantSignals } from '../lib/signals/variantSignals'
 import { computeVariantSignals } from '../lib/signals/variantSignals'
 import type { VariantScanUiState } from '../lib/scanVariantHits'
+import type { SmDirectionScanUiState } from '../lib/smDirectionScan'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 import {
@@ -132,18 +133,30 @@ function formatVariantScanSnapshot(ms: number): string {
   })
 }
 
+function fmtSmUsd(n: number): string {
+  const a = Math.abs(n)
+  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
+  if (a >= 1e6) return `$${(n / 1e6).toFixed(2)}M`
+  if (a >= 1e3) return `$${(n / 1e3).toFixed(1)}k`
+  return `$${n.toFixed(0)}`
+}
+
 export function DetailDrawer({
   row,
   variantScan,
+  smDirectionScan,
   pendingSymbol,
   openDetailError,
   onCloseAllDrawers,
   onCloseSymbolDrawer,
   onPickFromVariantScan,
   onRefreshVariantScan,
+  onPickFromSmDirectionScan,
+  onRefreshSmDirectionScan,
 }: {
   row: SymbolInsight | null
   variantScan: VariantScanUiState | null
+  smDirectionScan: SmDirectionScanUiState | null
   /** 单合约详情拉取中（如从聪明钱列表打开） */
   pendingSymbol?: string | null
   openDetailError?: string | null
@@ -154,6 +167,9 @@ export function DetailDrawer({
   onPickFromVariantScan: (insight: SymbolInsight) => void
   /** 强制重新拉榜扫描（忽略缓存） */
   onRefreshVariantScan: () => void
+  /** 从聪明钱净方向扫描打开合约详情（保留扫描抽屉） */
+  onPickFromSmDirectionScan: (symbol: string) => void
+  onRefreshSmDirectionScan: () => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -311,7 +327,7 @@ export function DetailDrawer({
     return mergeRatio(row.global, row.topAcc, row.topPos)
   }, [row])
 
-  const hasScan = Boolean(variantScan)
+  const hasScan = Boolean(variantScan || smDirectionScan)
   const hasTopOverlay = Boolean(
     row || pendingSymbol || openDetailError,
   )
@@ -432,6 +448,145 @@ export function DetailDrawer({
                             </td>
                             <td className="num">
                               {h.signals.v8.hit ? '✓' : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    ) : null
+
+  const smDirectionScanPanel =
+    smDirectionScan ? (
+      <div
+        className="drawer-backdrop drawer-stack-base"
+        onClick={onCloseAllDrawers}
+      >
+        <aside
+          className="drawer drawer-variant-scan"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label="聪明钱 24h 与 1h 净方向扫描"
+          aria-busy={smDirectionScan.phase === 'loading'}
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>聪明钱 · 24h / 1h 净方向背离</h2>
+              <p className="muted small">
+                同时拉取 24h 与 1h 聪明钱信号列表，筛出两周期净方向（BUY /
+                SELL）相反的合约；按两档有符号净名义之差的绝对值从大到小排序。
+              </p>
+              {smDirectionScan.phase === 'done' ? (
+                <p className="muted small drawer-variant-cache-line">
+                  完成时间 ·{' '}
+                  {formatVariantScanSnapshot(smDirectionScan.doneAtMs)}
+                </p>
+              ) : null}
+            </div>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={smDirectionScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshSmDirectionScan()
+                }}
+                title="重新拉取 24h 与 1h 列表并计算"
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
+          </header>
+          {smDirectionScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {smDirectionScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {smDirectionScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {smDirectionScan.error}
+              </p>
+            </section>
+          ) : null}
+          {smDirectionScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {smDirectionScan.hits.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  当前两档列表的交集内，没有净方向相反的合约。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small" style={{ marginTop: 0 }}>
+                    共 {smDirectionScan.hits.length}{' '}
+                    个合约 24h 与 1h 净方向相反；点击行打开合约详情（列表保留）。
+                  </p>
+                  <div className="drawer-constituents-table-wrap drawer-variant-scan-table-wrap">
+                    <table className="drawer-constituents-table drawer-variant-scan-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">合约</th>
+                          <th scope="col">24h</th>
+                          <th scope="col">1h</th>
+                          <th scope="col" className="num">
+                            差值
+                          </th>
+                          <th scope="col" className="num">
+                            |净| 24h
+                          </th>
+                          <th scope="col" className="num">
+                            |净| 1h
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {smDirectionScan.hits.map((h) => (
+                          <tr
+                            key={h.symbol}
+                            className="drawer-variant-scan-row"
+                            onClick={() => onPickFromSmDirectionScan(h.symbol)}
+                          >
+                            <td className="mono">
+                              {h.symbol.replace(/USDT$/i, '')}
+                            </td>
+                            <td>
+                              <span
+                                className={`sm-side sm-side--${h.row24h.side.toLowerCase()}`}
+                              >
+                                {h.row24h.side}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className={`sm-side sm-side--${h.row1h.side.toLowerCase()}`}
+                              >
+                                {h.row1h.side}
+                              </span>
+                            </td>
+                            <td className="num mono">
+                              {fmtSmUsd(h.gapScore)}
+                            </td>
+                            <td className="num mono">
+                              {fmtSmUsd(Math.abs(h.row24h.netNotional))}
+                            </td>
+                            <td className="num mono">
+                              {fmtSmUsd(Math.abs(h.row1h.netNotional))}
                             </td>
                           </tr>
                         ))}
@@ -798,6 +953,7 @@ export function DetailDrawer({
   return (
     <>
       {variantScanPanel}
+      {smDirectionScanPanel}
       {errorOverlay}
       {pendingOverlay}
       {mainDetailDrawer}
