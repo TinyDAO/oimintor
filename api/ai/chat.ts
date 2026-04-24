@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { buildTraderAiMessagesFromMarketPayload } from '../lib/traderAiMessages'
+import { buildTraderAiMessagesFromMarketPayload } from './traderAiMessages.js'
 
 /**
  * OpenAI 兼容 Chat Completions 代理。

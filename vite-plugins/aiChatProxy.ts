@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import type { Plugin, PreviewServer, ViteDevServer } from 'vite'
-import { buildTraderAiMessagesFromMarketPayload } from '../api/lib/traderAiMessages'
+import { buildTraderAiMessagesFromMarketPayload } from '../api/ai/traderAiMessages.js'
 
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
