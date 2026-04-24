@@ -6,7 +6,13 @@ import {
   buildTraderAnalysisPayload,
   type MergedRatioPoint,
 } from '../lib/ai/buildTraderAnalysisPayload'
+import {
+  clearTraderAiCache,
+  readTraderAiCache,
+  writeTraderAiCache,
+} from '../lib/ai/traderAnalysisLocalCache'
 import type { SymbolInsight } from '../lib/signals/compute'
+import { DrawerAiMarkdownBody } from './DrawerAiMarkdownBody'
 
 export function DrawerAiPanel({
   row,
@@ -17,10 +23,11 @@ export function DrawerAiPanel({
   klines: KlineCandle[] | null
   ratioSeries: MergedRatioPoint[]
 }) {
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'err'>(
-    'idle',
-  )
-  const [text, setText] = useState('')
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'done' | 'err'>(() => {
+    const cached = readTraderAiCache(row.symbol)
+    return cached ? 'done' : 'idle'
+  })
+  const [text, setText] = useState(() => readTraderAiCache(row.symbol) ?? '')
   const [err, setErr] = useState<string | null>(null)
   const [tallOutput, setTallOutput] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
@@ -29,6 +36,23 @@ export function DrawerAiPanel({
   useEffect(() => {
     return () => acRef.current?.abort()
   }, [])
+
+  useEffect(() => {
+    acRef.current?.abort()
+    acRef.current = null
+    const cached = readTraderAiCache(row.symbol)
+    if (cached) {
+      setText(cached)
+      setPhase('done')
+      setErr(null)
+    } else {
+      setText('')
+      setPhase('idle')
+      setErr(null)
+    }
+    setTallOutput(false)
+    setFullscreen(false)
+  }, [row.symbol])
 
   useEffect(() => {
     if (!fullscreen) return
@@ -56,6 +80,7 @@ export function DrawerAiPanel({
       if (ac.signal.aborted) return
       setText(out)
       setPhase('done')
+      writeTraderAiCache(row.symbol, out)
     } catch (e) {
       if (ac.signal.aborted) return
       setErr(e instanceof Error ? e.message : String(e))
@@ -66,6 +91,7 @@ export function DrawerAiPanel({
   }
 
   function clearResult() {
+    clearTraderAiCache(row.symbol)
     setPhase('idle')
     setText('')
     setErr(null)
@@ -79,8 +105,7 @@ export function DrawerAiPanel({
     <section className="drawer-section drawer-ai-panel" aria-label="AI 交易分析">
       <h3>AI 交易视角</h3>
       <p className="muted small" style={{ marginTop: 0 }}>
-        点击下方按钮将本页 1h K 线（价量）、OI 与三轨多空比等结构化数据发往服务端；
-        服务端组装提示词后调用模型，从专业交易员视角解读动能与风险。输出仅供学习，不构成投资建议。
+        点击下方按钮将从专业交易员视角解读动能与风险。输出仅供学习，不构成投资建议。
       </p>
       <div className="drawer-ai-actions">
         <button
@@ -135,7 +160,7 @@ export function DrawerAiPanel({
                 : 'drawer-ai-output-wrap'
             }
           >
-            <pre className="drawer-ai-output">{text}</pre>
+            <DrawerAiMarkdownBody markdown={text} />
           </div>
         </>
       ) : null}
@@ -166,7 +191,7 @@ export function DrawerAiPanel({
                   </button>
                 </header>
                 <div className="drawer-ai-fs-body">
-                  <pre className="drawer-ai-output drawer-ai-output--fs">{text}</pre>
+                  <DrawerAiMarkdownBody markdown={text} className="drawer-ai-md drawer-ai-md--fs" />
                 </div>
               </div>
             </div>,
