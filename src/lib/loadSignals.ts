@@ -62,6 +62,49 @@ async function poolMap<T, R>(
 
 export type LoadProgress = (msg: string) => void
 
+/**
+ * 浏览器侧始终先请求同源 `/api/market-insights`（Vite dev/preview 插件或 Vercel Function），
+ * 成功则只 1 次 HTTP；失败再回退到直连 /api/fapi 的多请求逻辑。
+ * 设置 VITE_MARKET_INSIGHTS_AGGREGATE=0 可强制跳过聚合（调试用）。
+ */
+async function tryLoadMarketInsightsViaAggregate(
+  onProgress: LoadProgress | undefined,
+  topN: TopNChoice,
+  signal: AbortSignal | undefined,
+): Promise<{ insights: SymbolInsight[]; alphaHits: Set<string> } | null> {
+  const g = globalThis as Record<string, unknown>
+  if (typeof g.window === 'undefined' || g.window == null) return null
+  const env = (import.meta as unknown as {
+    env: { VITE_MARKET_INSIGHTS_AGGREGATE?: string }
+  }).env
+  const agg = env.VITE_MARKET_INSIGHTS_AGGREGATE
+  if (agg === '0' || agg === 'false') return null
+  try {
+    onProgress?.('聚合接口（服务端）…')
+    const r = await fetch(
+      `/api/market-insights?topN=${encodeURIComponent(String(topN))}`,
+      { signal, credentials: 'same-origin' },
+    )
+    if (!r.ok) return null
+    const ct = r.headers.get('content-type') ?? ''
+    if (!ct.includes('application/json')) return null
+    const j = (await r.json()) as {
+      insights?: SymbolInsight[]
+      alphaSymbols?: string[]
+    }
+    if (!Array.isArray(j.insights)) return null
+    onProgress?.(`深度数据 ${j.insights.length} 个合约（聚合）`)
+    return {
+      insights: j.insights,
+      alphaHits: new Set(
+        Array.isArray(j.alphaSymbols) ? j.alphaSymbols : [],
+      ),
+    }
+  } catch {
+    return null
+  }
+}
+
 /** 永续合约名规范为 UPPERCASE 且以 USDT 结尾 */
 export function normalizePerpSymbol(symbol: string): string {
   const u = symbol.trim().toUpperCase()
@@ -123,8 +166,16 @@ export async function loadSymbolInsight(
 export async function loadMarketInsights(
   onProgress?: LoadProgress,
   topNInput: number = DEFAULT_TOP_N,
+  signal?: AbortSignal,
 ): Promise<{ insights: SymbolInsight[]; alphaHits: Set<string> }> {
   const topN = normalizeTopN(topNInput)
+  const viaApi = await tryLoadMarketInsightsViaAggregate(
+    onProgress,
+    topN,
+    signal,
+  )
+  if (viaApi) return viaApi
+
   onProgress?.('exchangeInfo + 24h tickers…')
   const [info, tickers, alphaList] = await Promise.all([
     fetchExchangeInfo(),

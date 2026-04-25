@@ -1,5 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/market-insights.ts": {
+      "maxDuration": 60
+    },
+    "api/variant-scan.ts": {
+      "maxDuration": 120
+    }
+  },
   "rewrites": [
     {
       "source": "/api/fapi/(.*)",

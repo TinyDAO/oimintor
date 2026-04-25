@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { aiChatProxyPlugin } from './vite-plugins/aiChatProxy'
+import { marketInsightsDevApiPlugin } from './vite-plugins/marketInsightsDevApi'
 
 const binanceProxy = {
   '/api/fapi': {
@@ -28,7 +29,7 @@ const binanceProxy = {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
-    plugins: [react(), aiChatProxyPlugin(env)],
+    plugins: [marketInsightsDevApiPlugin(), react(), aiChatProxyPlugin(env)],
     server: {
       proxy: { ...binanceProxy },
     },

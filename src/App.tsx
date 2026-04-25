@@ -26,6 +26,7 @@ import { SmartMoneyFuturesTable } from './components/SmartMoneyFuturesTable'
 import { DetailDrawer } from './components/DetailDrawer'
 import {
   scanVariantSignalsForInsights,
+  tryScanVariantViaAggregate,
   type VariantScanUiState,
 } from './lib/scanVariantHits'
 import {
@@ -186,10 +187,31 @@ export default function App() {
     setSmDirectionScan(null)
     setVariantScan({
       phase: 'loading',
-      progress: `加载 Top ${depth} 榜单…`,
+      progress: `V4A/V7/V8 聚合扫描（Top ${depth}）…`,
       depth,
     })
     try {
+      const aggregatedHits = await tryScanVariantViaAggregate(depth, ac.signal)
+      if (aggregatedHits != null) {
+        if (ac.signal.aborted) return
+        const now = Date.now()
+        writeVariantScanCache(depth, aggregatedHits)
+        setVariantScan({
+          phase: 'done',
+          progress: '',
+          hits: aggregatedHits,
+          depth,
+          cachedAtMs: now,
+          fromCache: false,
+        })
+        return
+      }
+
+      setVariantScan({
+        phase: 'loading',
+        progress: `加载 Top ${depth} 榜单…`,
+        depth,
+      })
       const { insights } = await loadMarketInsights((msg) => {
         setVariantScan((s) =>
           s?.phase === 'loading' ? { ...s, progress: msg } : s,

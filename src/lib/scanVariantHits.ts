@@ -1,4 +1,5 @@
 import { fetchKlines } from './api/futures'
+import { normalizeTopN } from './loadSignals'
 import type { SymbolInsight } from './signals/compute'
 import {
   computeVariantSignals,
@@ -49,6 +50,41 @@ async function poolMap<T, R>(
 }
 
 const KLINE_LIMIT = 336
+
+/**
+ * 浏览器优先 POST `/api/variant-scan`（Vite 中间件或 Vercel），一次完成榜单 + K 线 + V4A/V7/V8。
+ * 与 `loadSignals` 中 `VITE_MARKET_INSIGHTS_AGGREGATE=0` 同源：设为 0/false 时跳过。
+ */
+export async function tryScanVariantViaAggregate(
+  topNInput: number,
+  signal?: AbortSignal,
+): Promise<VariantScanHit[] | null> {
+  const g = globalThis as Record<string, unknown>
+  if (typeof g.window === 'undefined' || g.window == null) return null
+  const env = (import.meta as unknown as {
+    env: { VITE_MARKET_INSIGHTS_AGGREGATE?: string }
+  }).env
+  const agg = env.VITE_MARKET_INSIGHTS_AGGREGATE
+  if (agg === '0' || agg === 'false') return null
+  const topN = normalizeTopN(topNInput)
+  try {
+    const r = await fetch('/api/variant-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topN }),
+      signal,
+      credentials: 'same-origin',
+    })
+    if (!r.ok) return null
+    const ct = r.headers.get('content-type') ?? ''
+    if (!ct.includes('application/json')) return null
+    const j = (await r.json()) as { hits?: VariantScanHit[] }
+    if (!Array.isArray(j.hits)) return null
+    return j.hits
+  } catch {
+    return null
+  }
+}
 
 /**
  * 对已有 insights 逐个拉 1h K 线后计算 V4A/V7/V8，返回至少命中一条的合约。
