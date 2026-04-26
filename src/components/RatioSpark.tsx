@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import {
   LineChart,
   Line,
@@ -8,7 +9,21 @@ import {
 } from 'recharts'
 import type { RatioRow } from '../lib/api/futures'
 
-export function RatioSpark({
+/** 缩略图不需要全量点数，减轻 Recharts 在表头排序等整表重绘时的开销 */
+const SPARK_MAX_POINTS = 96
+
+function downsampleSeries<T>(sorted: T[], maxLen: number): T[] {
+  if (sorted.length <= maxLen) return sorted
+  const out: T[] = []
+  const last = sorted.length - 1
+  for (let i = 0; i < maxLen; i++) {
+    const idx = Math.round((i / (maxLen - 1)) * last)
+    out.push(sorted[idx]!)
+  }
+  return out
+}
+
+function RatioSparkInner({
   global,
   topPos,
   height = 44,
@@ -17,19 +32,23 @@ export function RatioSpark({
   topPos: RatioRow[]
   height?: number
 }) {
-  const gm = new Map<number, number>()
-  for (const r of global) gm.set(r.timestamp, parseFloat(r.longShortRatio))
-  const data: { t: number; g?: number; tp?: number }[] = []
-  for (const r of topPos) {
-    const g = gm.get(r.timestamp)
-    if (g === undefined) continue
-    data.push({
-      t: r.timestamp,
-      g,
-      tp: parseFloat(r.longShortRatio),
-    })
-  }
-  data.sort((a, b) => a.t - b.t)
+  const data = useMemo(() => {
+    const gm = new Map<number, number>()
+    for (const r of global) gm.set(r.timestamp, parseFloat(r.longShortRatio))
+    const raw: { t: number; g?: number; tp?: number }[] = []
+    for (const r of topPos) {
+      const g = gm.get(r.timestamp)
+      if (g === undefined) continue
+      raw.push({
+        t: r.timestamp,
+        g,
+        tp: parseFloat(r.longShortRatio),
+      })
+    }
+    raw.sort((a, b) => a.t - b.t)
+    return downsampleSeries(raw, SPARK_MAX_POINTS)
+  }, [global, topPos])
+
   if (data.length === 0) {
     return <div className="spark-empty">—</div>
   }
@@ -67,3 +86,6 @@ export function RatioSpark({
     </div>
   )
 }
+
+/** 排序时父组件重绘但各合约 global/topPos 引用不变，避免每行重跑 Recharts */
+export const RatioSpark = memo(RatioSparkInner)
