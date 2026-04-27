@@ -1,7 +1,7 @@
 import type { SymbolInsight } from './signals/compute'
 
 /** 与榜单/脚本约定一致：24h 滚动 OI% 突破阈值 */
-export const OI_CROSS_THRESHOLD_PCT = 50
+export const OI_CROSS_THRESHOLD_PCT = 30
 
 export type OiCrossEvent = {
   symbol: string
@@ -62,7 +62,7 @@ export function playOiCrossChime() {
 export function notifyOiCrossesDesktop(crosses: OiCrossEvent[]): boolean {
   if (crosses.length === 0) return false
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false
-  const title = 'OI Monitor · 24h OI% 突破 50%'
+  const title = `OI Monitor · 24h OI% 突破 ${OI_CROSS_THRESHOLD_PCT}%`
   const body = crosses
     .map((c) => `${c.symbol}  ${c.prevPct.toFixed(1)}% → ${c.currPct.toFixed(1)}%`)
     .join('\n')

@@ -17,6 +17,7 @@ import {
 import {
   findOiCrossesAboveThreshold,
   notifyOiCrossesDesktop,
+  OI_CROSS_THRESHOLD_PCT,
   playOiCrossChime,
   snapshotOiPct24h,
 } from './lib/oiCrossAlert'
@@ -122,7 +123,7 @@ export default function App() {
   const smScanAbortRef = useRef<AbortController | null>(null)
   const smDetailAbortRef = useRef<AbortController | null>(null)
 
-  /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿 50% 变为上穿 50%） */
+  /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿阈值变为上穿阈值，见 oiCrossAlert） */
   const prevOiPctSnapshotRef = useRef<Map<string, number> | null>(null)
   const [oiCrossAlerts, setOiCrossAlerts] = useState<
     { id: string; symbol: string; prevPct: number; currPct: number }[]
@@ -614,7 +615,7 @@ export default function App() {
                   className="btn btn-ghost small"
                   onClick={() => void requestDesktopNotifyPermission()}
                 >
-                  启用桌面通知（OI 突破 50%）
+                  启用桌面通知（OI 突破 {OI_CROSS_THRESHOLD_PCT}%）
                 </button>
               ) : null}
             </>
@@ -711,7 +712,9 @@ export default function App() {
             {oiCrossAlerts.length > 0 ? (
               <div className="oi-cross-strip" role="region" aria-label="24h OI 突破提醒">
                 <div className="oi-cross-strip-head">
-                  <span className="oi-cross-strip-title">24h OI% 刚突破 50%</span>
+                  <span className="oi-cross-strip-title">
+                    24h OI% 刚突破 {OI_CROSS_THRESHOLD_PCT}%
+                  </span>
                   <button
                     type="button"
                     className="btn btn-ghost small"

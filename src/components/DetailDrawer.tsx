@@ -17,6 +17,7 @@ import {
   type KlineCandle,
   type PremiumIndex,
 } from '../lib/api/futures'
+import { loadSymbolInsight } from '../lib/loadSignals'
 import { BinanceFuturesLink, BinanceLogoMark } from './BinanceLink'
 import { OiArea } from './OiChart'
 import { PriceLine } from './PriceChart'
@@ -186,6 +187,34 @@ export function DetailDrawer({
   )
   const [smOvLoading, setSmOvLoading] = useState(false)
   const [smOvErr, setSmOvErr] = useState<string | null>(null)
+  /** 聚合 /api 列表无 oiHist 时在抽屉内补全 */
+  const [rowEnriched, setRowEnriched] = useState<SymbolInsight | null>(null)
+
+  /** 同 row 有值时非 null（`row` 有值时总有 `row` 作回退） */
+  const displayRow: SymbolInsight | null =
+    row == null ? null : (rowEnriched ?? row)
+
+  useEffect(() => {
+    if (!row) {
+      setRowEnriched(null)
+      return
+    }
+    if (row.oiHist.length > 0) {
+      setRowEnriched(null)
+      return
+    }
+    const ac = new AbortController()
+    setRowEnriched(null)
+    void loadSymbolInsight(row.symbol, ac.signal)
+      .then((full) => {
+        if (ac.signal.aborted) return
+        if (full) setRowEnriched(full)
+      })
+      .catch(() => {
+        if (!ac.signal.aborted) setRowEnriched(null)
+      })
+    return () => ac.abort()
+  }, [row?.symbol, row?.oiHist.length])
 
   useEffect(() => {
     if (!row) {
@@ -318,14 +347,14 @@ export function DetailDrawer({
   }, [row?.symbol])
 
   const variantSignals: VariantSignals | null = useMemo(() => {
-    if (!row) return null
-    return computeVariantSignals(row, klines)
-  }, [row, klines])
+    if (!displayRow) return null
+    return computeVariantSignals(displayRow, klines)
+  }, [displayRow, klines])
 
   const ratioData = useMemo(() => {
-    if (!row) return []
-    return mergeRatio(row.global, row.topAcc, row.topPos)
-  }, [row])
+    if (!displayRow) return []
+    return mergeRatio(displayRow.global, displayRow.topAcc, displayRow.topPos)
+  }, [displayRow])
 
   const hasScan = Boolean(variantScan || smDirectionScan)
   const hasTopOverlay = Boolean(
@@ -759,7 +788,11 @@ export function DetailDrawer({
         </div>
         <section className="drawer-section">
           <h3>未平仓 OI 与名义价值（1h，约 14 天）</h3>
-          <OiArea rows={row.oiHist} height={176} />
+          {row.oiHist.length === 0 && !rowEnriched ? (
+            <div className="sk sk-line" style={{ height: 176, borderRadius: 6 }} />
+          ) : (
+            <OiArea rows={displayRow!.oiHist} height={176} />
+          )}
         </section>
         <section className="drawer-section">
           <h3>聪明钱总览</h3>
@@ -944,7 +977,11 @@ export function DetailDrawer({
           </section>
         ) : null}
         {isAiAnalysisEntryEnabled() ? (
-          <DrawerAiPanel row={row} klines={klines} ratioSeries={ratioData} />
+          <DrawerAiPanel
+            row={displayRow!}
+            klines={klines}
+            ratioSeries={ratioData}
+          />
         ) : null}
       </aside>
     </div>

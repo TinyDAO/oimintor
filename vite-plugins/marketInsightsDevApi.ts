@@ -5,6 +5,7 @@ import {
   loadMarketInsights,
   normalizeTopN,
 } from '../src/lib/loadSignals.ts'
+import { mapInsightsSlimForList } from '../src/lib/symbolInsightSlim.ts'
 import { scanVariantSignalsForInsights } from '../src/lib/scanVariantHits.ts'
 
 function parsePathname(rawUrl: string): string | null {
@@ -41,9 +42,10 @@ async function handleMarketInsights(
   const parsed = parseInt(u.searchParams.get('topN') ?? '', 10)
   const topN = Number.isFinite(parsed) ? normalizeTopN(parsed) : DEFAULT_TOP_N
   const { insights, alphaHits } = await loadMarketInsights(undefined, topN)
+  const listPayload = mapInsightsSlimForList(insights)
   const body = JSON.stringify({
     topN,
-    insights,
+    insights: listPayload,
     alphaSymbols: [...alphaHits],
   })
   res.statusCode = 200
