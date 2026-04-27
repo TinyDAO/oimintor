@@ -1,4 +1,4 @@
-import { fapi } from './paths'
+import { fapi } from './paths.js'
 
 const UA_FUTURES = 'binance-derivatives-trading-usds-futures/1.1.0 (Skill)'
 

@@ -1,4 +1,4 @@
-import type { KlineCandle, OiHistRow, RatioRow, Ticker24h } from '../api/futures'
+import type { KlineCandle, OiHistRow, RatioRow, Ticker24h } from '../api/futures.js'
 
 export type SignalFlags = {
   oiSpike: boolean

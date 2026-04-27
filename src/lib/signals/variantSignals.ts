@@ -1,5 +1,5 @@
-import type { KlineCandle, OiHistRow } from '../api/futures'
-import type { SymbolInsight } from './compute'
+import type { KlineCandle, OiHistRow } from '../api/futures.js'
+import type { SymbolInsight } from './compute.js'
 
 /**
  * 抽屉内展示的 V4A / V7 / V8 启发式判定（与 Autoresearch / 社区框架对应，非精确回测）。

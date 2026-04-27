@@ -1,4 +1,4 @@
-import { bapi } from './paths'
+import { bapi } from './paths.js'
 
 const UA = 'binance-alpha/1.1.0 (Skill)'
 

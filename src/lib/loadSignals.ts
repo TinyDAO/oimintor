@@ -6,18 +6,18 @@ import {
   fetchTopLongShortAccount,
   fetchTopLongShortPosition,
   fetchKlines,
-} from './api/futures'
+} from './api/futures.js'
 import {
   fetchAlphaTokenListCached,
   futuresSymbolsFromAlpha,
-} from './api/alpha'
+} from './api/alpha.js'
 import {
   perpetualUsdtSymbols,
   filterAltUniverse,
   topSymbolsByQuoteVolume,
   tickerMap,
-} from './binance/universe'
-import { buildInsight, type SymbolInsight } from './signals/compute'
+} from './binance/universe.js'
+import { buildInsight, type SymbolInsight } from './signals/compute.js'
 
 const PERIOD = '1h'
 /** 1h K：336 ≈ 14 天（API max 500） */

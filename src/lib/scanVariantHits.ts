@@ -1,10 +1,10 @@
-import { fetchKlines } from './api/futures'
-import { normalizeTopN } from './loadSignals'
-import type { SymbolInsight } from './signals/compute'
+import { fetchKlines } from './api/futures.js'
+import { normalizeTopN } from './loadSignals.js'
+import type { SymbolInsight } from './signals/compute.js'
 import {
   computeVariantSignals,
   type VariantSignals,
-} from './signals/variantSignals'
+} from './signals/variantSignals.js'
 
 export type VariantScanHit = {
   symbol: string

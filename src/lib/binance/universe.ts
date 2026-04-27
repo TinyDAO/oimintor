@@ -1,5 +1,4 @@
-import type { ExchangeSymbol } from '../api/futures'
-import type { Ticker24h } from '../api/futures'
+import type { ExchangeSymbol, Ticker24h } from '../api/futures.js'
 
 const DEFAULT_EXCLUDE = new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT'])
 
