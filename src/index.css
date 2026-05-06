@@ -720,6 +720,15 @@ body::before {
   margin-bottom: 0.4rem;
 }
 
+.sm-overview-bucket-tabs {
+  margin-bottom: 0.45rem;
+}
+
+.sm-overview-bucket-tabs .view-tab {
+  padding: 0.28rem 0.65rem;
+  font-size: 0.72rem;
+}
+
 .sm-overview-pnl-mark {
   font-weight: 500;
 }

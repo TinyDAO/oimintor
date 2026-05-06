@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { SmartMoneyOverviewData } from '../lib/api/smartMoneyFutures'
 import { formatCoinPrice } from '../lib/formatPrice'
 
@@ -72,6 +73,8 @@ function weightedEntry(d: SmartMoneyOverviewData, side: 'long' | 'short'): numbe
   return sideNotional(d, 'short') / q
 }
 
+type BucketTab = 'trader' | 'whale'
+
 export function SmartMoneyOverviewPanel({
   data,
   markPriceUsd,
@@ -80,6 +83,8 @@ export function SmartMoneyOverviewPanel({
   /** 永续标记价（USDT）；用于估算分桶未实现盈亏 */
   markPriceUsd?: number
 }) {
+  const [bucketTab, setBucketTab] = useState<BucketTab>('trader')
+
   const longN = sideNotional(data, 'long')
   const shortN = sideNotional(data, 'short')
   const sumN = longN + shortN
@@ -112,8 +117,6 @@ export function SmartMoneyOverviewPanel({
   const shortUplTotal = upl
     ? upl.shortTrader + upl.shortWhale
     : NaN
-  const netUpl =
-    upl != null ? longUplTotal + shortUplTotal : NaN
 
   return (
     <div className="sm-overview">
@@ -154,50 +157,80 @@ export function SmartMoneyOverviewPanel({
           )}
         </div>
         {markOk && upl ? (
-          <dl className="sm-overview-pnl-dl">
-            <div>
-              <dt>多头 · 普通</dt>
-              <dd className={`mono ${pnlClass(upl.longTrader)}`}>
-                {fmtUsdSigned(upl.longTrader)}
-              </dd>
-            </div>
-            <div>
-              <dt>多头 · 大户</dt>
-              <dd className={`mono ${pnlClass(upl.longWhale)}`}>
-                {fmtUsdSigned(upl.longWhale)}
-              </dd>
-            </div>
-            <div className="sm-overview-pnl-subtotal">
-              <dt>多头 · 合计</dt>
-              <dd className={`mono ${pnlClass(longUplTotal)}`}>
-                {fmtUsdSigned(longUplTotal)}
-              </dd>
-            </div>
-            <div>
-              <dt>空头 · 普通</dt>
-              <dd className={`mono ${pnlClass(upl.shortTrader)}`}>
-                {fmtUsdSigned(upl.shortTrader)}
-              </dd>
-            </div>
-            <div>
-              <dt>空头 · 大户</dt>
-              <dd className={`mono ${pnlClass(upl.shortWhale)}`}>
-                {fmtUsdSigned(upl.shortWhale)}
-              </dd>
-            </div>
-            <div className="sm-overview-pnl-subtotal">
-              <dt>空头 · 合计</dt>
-              <dd className={`mono ${pnlClass(shortUplTotal)}`}>
-                {fmtUsdSigned(shortUplTotal)}
-              </dd>
-            </div>
-            <div className="sm-overview-pnl-net">
-              <dt>多空净额（聪明钱侧）</dt>
-              <dd className={`mono ${pnlClass(netUpl)}`}>
-                {fmtUsdSigned(netUpl)}
-              </dd>
-            </div>
-          </dl>
+          <>
+            <nav
+              className="view-tabs sm-overview-bucket-tabs"
+              aria-label="未实现盈亏分桶"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={bucketTab === 'trader'}
+                className={bucketTab === 'trader' ? 'view-tab on' : 'view-tab'}
+                onClick={() => setBucketTab('trader')}
+              >
+                普通
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={bucketTab === 'whale'}
+                className={bucketTab === 'whale' ? 'view-tab on' : 'view-tab'}
+                onClick={() => setBucketTab('whale')}
+              >
+                大户
+              </button>
+            </nav>
+            <dl className="sm-overview-pnl-dl" key={bucketTab}>
+              {bucketTab === 'trader' ? (
+                <>
+                  <div>
+                    <dt>多头</dt>
+                    <dd className={`mono ${pnlClass(upl.longTrader)}`}>
+                      {fmtUsdSigned(upl.longTrader)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>空头</dt>
+                    <dd className={`mono ${pnlClass(upl.shortTrader)}`}>
+                      {fmtUsdSigned(upl.shortTrader)}
+                    </dd>
+                  </div>
+                  <div className="sm-overview-pnl-net">
+                    <dt>多空净额</dt>
+                    <dd
+                      className={`mono ${pnlClass(upl.longTrader + upl.shortTrader)}`}
+                    >
+                      {fmtUsdSigned(upl.longTrader + upl.shortTrader)}
+                    </dd>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <dt>多头</dt>
+                    <dd className={`mono ${pnlClass(upl.longWhale)}`}>
+                      {fmtUsdSigned(upl.longWhale)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>空头</dt>
+                    <dd className={`mono ${pnlClass(upl.shortWhale)}`}>
+                      {fmtUsdSigned(upl.shortWhale)}
+                    </dd>
+                  </div>
+                  <div className="sm-overview-pnl-net">
+                    <dt>多空净额</dt>
+                    <dd
+                      className={`mono ${pnlClass(upl.longWhale + upl.shortWhale)}`}
+                    >
+                      {fmtUsdSigned(upl.longWhale + upl.shortWhale)}
+                    </dd>
+                  </div>
+                </>
+              )}
+            </dl>
+          </>
         ) : null}
         {markOk &&
         upl &&
@@ -340,7 +373,8 @@ export function SmartMoneyOverviewPanel({
       </div>
 
       <p className="muted small sm-overview-foot">
-        数据来源 Binance 合约聪明钱公开接口。盈亏金额为按标记价与分桶持仓均价的估算，非官方逐笔汇总；普通/大户为接口分桶。聪明钱仅为市场子集，多空两侧估算盈亏之和不必为零（对手多为非聪明钱）。
+        数据来源 Binance 合约聪明钱公开接口。盈亏金额为按标记价与分桶持仓均价的估算，非官方逐笔汇总；上方 Tab
+        切换「普通 / 大户」对应接口分桶，各行「多空净额」仅为当前分桶内多+空，非把两类交易者相加。聪明钱仅为市场子集，多空两侧估算盈亏之和不必为零（对手多为非聪明钱）。
       </p>
     </div>
   )
