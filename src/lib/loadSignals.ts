@@ -6,6 +6,7 @@ import {
   fetchTopLongShortAccount,
   fetchTopLongShortPosition,
   fetchKlines,
+  type Ticker24h,
 } from './api/futures.js'
 import {
   fetchAlphaTokenListCached,
@@ -111,14 +112,24 @@ export function normalizePerpSymbol(symbol: string): string {
   return u.endsWith('USDT') ? u : `${u}USDT`
 }
 
+function placeholderTicker24h(sym: string): Ticker24h {
+  return {
+    symbol: sym,
+    lastPrice: '0',
+    priceChangePercent: '0',
+    quoteVolume: '0',
+    highPrice: '0',
+    lowPrice: '0',
+  }
+}
+
 async function buildInsightForSymbol(
   sym: string,
   tmap: ReturnType<typeof tickerMap>,
   alphaHits: Set<string>,
   signal?: AbortSignal,
 ): Promise<SymbolInsight | null> {
-  const ticker = tmap.get(sym)
-  if (!ticker) return null
+  const ticker = tmap.get(sym) ?? placeholderTicker24h(sym)
   if (signal?.aborted) return null
   try {
     const [oiHist, gl, ta, tp, dailyK] = await Promise.all([

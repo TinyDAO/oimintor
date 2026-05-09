@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import type { SmartMoneyOverviewData } from '../lib/api/smartMoneyFutures'
+import {
+  overviewSideNotional,
+  overviewSideNotionalTraders,
+  type SmartMoneyOverviewData,
+} from '../lib/api/smartMoneyFutures'
 import { formatCoinPrice } from '../lib/formatPrice'
 
 function fmtUsd(n: number): string {
@@ -49,28 +53,12 @@ function estimateBucketUpl(
   }
 }
 
-function sideNotional(d: SmartMoneyOverviewData, side: 'long' | 'short'): number {
+/** 与「估算名义」同源：仅大户分桶，均价即接口大户均价 */
+function weightedEntryWhale(d: SmartMoneyOverviewData, side: 'long' | 'short'): number {
   if (side === 'long') {
-    return (
-      d.longTradersQty * d.longTradersAvgEntryPrice +
-      d.longWhalesQty * d.longWhalesAvgEntryPrice
-    )
+    return d.longWhalesQty > 0 ? d.longWhalesAvgEntryPrice : 0
   }
-  return (
-    d.shortTradersQty * d.shortTradersAvgEntryPrice +
-    d.shortWhalesQty * d.shortWhalesAvgEntryPrice
-  )
-}
-
-function weightedEntry(d: SmartMoneyOverviewData, side: 'long' | 'short'): number {
-  if (side === 'long') {
-    const q = d.longTradersQty + d.longWhalesQty
-    if (q <= 0) return 0
-    return sideNotional(d, 'long') / q
-  }
-  const q = d.shortTradersQty + d.shortWhalesQty
-  if (q <= 0) return 0
-  return sideNotional(d, 'short') / q
+  return d.shortWhalesQty > 0 ? d.shortWhalesAvgEntryPrice : 0
 }
 
 type BucketTab = 'trader' | 'whale'
@@ -85,8 +73,10 @@ export function SmartMoneyOverviewPanel({
 }) {
   const [bucketTab, setBucketTab] = useState<BucketTab>('trader')
 
-  const longN = sideNotional(data, 'long')
-  const shortN = sideNotional(data, 'short')
+  const longN = overviewSideNotional(data, 'long')
+  const shortN = overviewSideNotional(data, 'short')
+  const longNTrader = overviewSideNotionalTraders(data, 'long')
+  const shortNTrader = overviewSideNotionalTraders(data, 'short')
   const sumN = longN + shortN
   const longPct = sumN > 0 ? (longN / sumN) * 100 : 50
 
@@ -101,8 +91,8 @@ export function SmartMoneyOverviewPanel({
   const shortWin =
     shortPeople > 0 ? (shortProfit / shortPeople) * 100 : 0
 
-  const longEntry = weightedEntry(data, 'long')
-  const shortEntry = weightedEntry(data, 'short')
+  const longEntry = weightedEntryWhale(data, 'long')
+  const shortEntry = weightedEntryWhale(data, 'short')
 
   const base = data.symbol.replace(/USDT$/i, '')
 
@@ -261,7 +251,7 @@ export function SmartMoneyOverviewPanel({
         />
       </div>
       <p className="muted small sm-overview-bar-legend">
-        条带为按开仓价估算的多空名义占比（{longPct.toFixed(1)}% /{' '}
+        条带为按大户分桶估算的多空名义占比（{longPct.toFixed(1)}% /{' '}
         {(100 - longPct).toFixed(1)}%）；与上方比值相互校验。
       </p>
 
@@ -286,11 +276,15 @@ export function SmartMoneyOverviewPanel({
           </div>
           <dl className="sm-overview-dl">
             <div>
-              <dt>估算名义（多）</dt>
+              <dt>估算名义（多·大户）</dt>
               <dd className="mono">{fmtUsd(longN)}</dd>
             </div>
             <div>
-              <dt>加权均价（{base}）</dt>
+              <dt>估算名义（多·交易员）</dt>
+              <dd className="mono">{fmtUsd(longNTrader)}</dd>
+            </div>
+            <div>
+              <dt>加权均价（大户，{base}）</dt>
               <dd className="mono">{formatCoinPrice(longEntry)}</dd>
             </div>
             <div>
@@ -300,9 +294,9 @@ export function SmartMoneyOverviewPanel({
               </dd>
             </div>
             <div>
-              <dt>持仓量（普通+大户）</dt>
+              <dt>持仓量（大户）</dt>
               <dd className="mono">
-                {(data.longTradersQty + data.longWhalesQty).toLocaleString(undefined, {
+                {data.longWhalesQty.toLocaleString(undefined, {
                   maximumFractionDigits: 4,
                 })}{' '}
                 {base}
@@ -339,11 +333,15 @@ export function SmartMoneyOverviewPanel({
           </div>
           <dl className="sm-overview-dl">
             <div>
-              <dt>估算名义（空）</dt>
+              <dt>估算名义（空·大户）</dt>
               <dd className="mono">{fmtUsd(shortN)}</dd>
             </div>
             <div>
-              <dt>加权均价（{base}）</dt>
+              <dt>估算名义（空·交易员）</dt>
+              <dd className="mono">{fmtUsd(shortNTrader)}</dd>
+            </div>
+            <div>
+              <dt>加权均价（大户，{base}）</dt>
               <dd className="mono">{formatCoinPrice(shortEntry)}</dd>
             </div>
             <div>
@@ -353,12 +351,11 @@ export function SmartMoneyOverviewPanel({
               </dd>
             </div>
             <div>
-              <dt>持仓量（普通+大户）</dt>
+              <dt>持仓量（大户）</dt>
               <dd className="mono">
-                {(data.shortTradersQty + data.shortWhalesQty).toLocaleString(
-                  undefined,
-                  { maximumFractionDigits: 4 },
-                )}{' '}
+                {data.shortWhalesQty.toLocaleString(undefined, {
+                  maximumFractionDigits: 4,
+                })}{' '}
                 {base}
               </dd>
             </div>
@@ -373,8 +370,9 @@ export function SmartMoneyOverviewPanel({
       </div>
 
       <p className="muted small sm-overview-foot">
-        数据来源 Binance 合约聪明钱公开接口。盈亏金额为按标记价与分桶持仓均价的估算，非官方逐笔汇总；上方 Tab
-        切换「普通 / 大户」对应接口分桶，各行「多空净额」仅为当前分桶内多+空，非把两类交易者相加。聪明钱仅为市场子集，多空两侧估算盈亏之和不必为零（对手多为非聪明钱）。
+        数据来源 Binance 合约聪明钱公开接口。条带占比与聪明天平扫描仅取大户分桶（大户 qty ×
+        大户开仓均价）；下方同时列出交易员分桶（普通 qty × 普通开仓均价）估算名义供对照，两类名义勿简单相加合并。普通与大户人数仍分别列出。盈亏为按标记价与各分桶均价的估算，非官方逐笔汇总；上方
+        Tab 切换「普通 / 大户」对应未实现盈亏分桶，各行「多空净额」仅为该分桶内多+空。聪明钱仅为市场子集，多空两侧估算盈亏之和不必为零（对手多为非聪明钱）。
       </p>
     </div>
   )

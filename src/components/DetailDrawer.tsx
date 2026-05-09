@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   LineChart,
   Line,
@@ -46,11 +47,17 @@ import type { VariantSignals } from '../lib/signals/variantSignals'
 import { computeVariantSignals } from '../lib/signals/variantSignals'
 import type { VariantScanUiState } from '../lib/scanVariantHits'
 import type { SmDirectionScanUiState } from '../lib/smDirectionScan'
+import {
+  SM_NOTIONAL_RATIO_SCAN_TITLE,
+  type SmNotionalRatioScanUiState,
+} from '../lib/smNotionalRatioScan'
+import { SmNotionalRatioScanTable } from './SmNotionalRatioScanTable'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 import {
   fetchSmartMoneyOverview,
   type SmartMoneyOverviewData,
+  type SmartMoneyTimeRange,
 } from '../lib/api/smartMoneyFutures'
 import { SmartMoneyOverviewPanel } from './SmartMoneyOverviewPanel'
 import { DrawerAiPanel } from './DrawerAiPanel'
@@ -142,10 +149,26 @@ function fmtSmUsd(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
+function labelSmRange(r: SmartMoneyTimeRange): string {
+  switch (r) {
+    case '30m':
+      return '30 分钟'
+    case '1h':
+      return '1 小时'
+    case '24h':
+      return '24 小时'
+    case '7d':
+      return '7 日'
+    default:
+      return r
+  }
+}
+
 export function DetailDrawer({
   row,
   variantScan,
   smDirectionScan,
+  smNotionalRatioScan,
   pendingSymbol,
   openDetailError,
   onCloseAllDrawers,
@@ -154,10 +177,13 @@ export function DetailDrawer({
   onRefreshVariantScan,
   onPickFromSmDirectionScan,
   onRefreshSmDirectionScan,
+  onPickFromSmNotionalRatioScan,
+  onRefreshSmNotionalRatioScan,
 }: {
   row: SymbolInsight | null
   variantScan: VariantScanUiState | null
   smDirectionScan: SmDirectionScanUiState | null
+  smNotionalRatioScan: SmNotionalRatioScanUiState | null
   /** 单合约详情拉取中（如从聪明钱列表打开） */
   pendingSymbol?: string | null
   openDetailError?: string | null
@@ -171,6 +197,8 @@ export function DetailDrawer({
   /** 从聪明钱净方向扫描打开合约详情（保留扫描抽屉） */
   onPickFromSmDirectionScan: (symbol: string) => void
   onRefreshSmDirectionScan: () => void
+  onPickFromSmNotionalRatioScan: (symbol: string) => void
+  onRefreshSmNotionalRatioScan: () => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -356,7 +384,9 @@ export function DetailDrawer({
     return mergeRatio(displayRow.global, displayRow.topAcc, displayRow.topPos)
   }, [displayRow])
 
-  const hasScan = Boolean(variantScan || smDirectionScan)
+  const hasScan = Boolean(
+    variantScan || smDirectionScan || smNotionalRatioScan,
+  )
   const hasTopOverlay = Boolean(
     row || pendingSymbol || openDetailError,
   )
@@ -630,6 +660,96 @@ export function DetailDrawer({
       </div>
     ) : null
 
+  const smNotionalRatioScanPanel =
+    smNotionalRatioScan ? (
+      <div
+        className="drawer-backdrop drawer-stack-base"
+        onClick={onCloseAllDrawers}
+      >
+        <aside
+          className="drawer drawer-variant-scan"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label={`${SM_NOTIONAL_RATIO_SCAN_TITLE} 扫描`}
+          aria-busy={smNotionalRatioScan.phase === 'loading'}
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>聪明钱 · {SM_NOTIONAL_RATIO_SCAN_TITLE}</h2>
+              <p className="muted small">
+                先用聪明钱「{labelSmRange(smNotionalRatioScan.timeRange)}」列表筛出活跃合约，
+                再逐个调用 overview 接口；多/空估算名义仅取大户分桶（大户 qty × 大户开仓均价），
+                与详情页「聪明钱总览 · 估算名义」完全一致。默认按多空比从高到低排序。
+              </p>
+              {smNotionalRatioScan.phase === 'done' ? (
+                <p className="muted small drawer-variant-cache-line">
+                  完成时间 ·{' '}
+                  {formatVariantScanSnapshot(smNotionalRatioScan.doneAtMs)}
+                </p>
+              ) : null}
+            </div>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={smNotionalRatioScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshSmNotionalRatioScan()
+                }}
+                title="按当前统计周期重新拉取聪明钱列表"
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
+          </header>
+          {smNotionalRatioScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {smNotionalRatioScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {smNotionalRatioScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {smNotionalRatioScan.error}
+              </p>
+            </section>
+          ) : null}
+          {smNotionalRatioScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {smNotionalRatioScan.rows.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  当前周期聪明钱列表为空。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small" style={{ marginTop: 0 }}>
+                    共 {smNotionalRatioScan.rows.length} / {smNotionalRatioScan.totalCount}{' '}
+                    个合约（{smNotionalRatioScan.failedCount > 0
+                      ? `${smNotionalRatioScan.failedCount} 个 overview 拉取失败已跳过`
+                      : 'overview 全部成功'}）；表头可排序，点击行或「详情」叠开合约详情（列表保留）。
+                  </p>
+                  <SmNotionalRatioScanTable
+                    rows={smNotionalRatioScan.rows}
+                    onOpenDetail={onPickFromSmNotionalRatioScan}
+                  />
+                </>
+              )}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    ) : null
+
   const errorOverlay =
     openDetailError && !row ? (
       <div
@@ -797,7 +917,8 @@ export function DetailDrawer({
         <section className="drawer-section">
           <h3>聪明钱总览</h3>
           <p className="muted small" style={{ marginTop: 0 }}>
-            Binance 合约聪明钱聚合（普通 / 大户分桶）；与站内列表接口同源 overview。
+            接口 overview（无统计周期）：下方「估算名义（多/空）」为各侧大户持仓量 × 大户开仓均价，表示当前聪明钱大户分桶快照；
+            聪明天平扫描结果直接基于这两值的比，相同合约数据应当一致。
           </p>
           {smOvLoading ? (
             <div className="sk sk-line" style={{ height: 140, borderRadius: 8 }} />
@@ -991,9 +1112,15 @@ export function DetailDrawer({
     <>
       {variantScanPanel}
       {smDirectionScanPanel}
-      {errorOverlay}
-      {pendingOverlay}
-      {mainDetailDrawer}
+      {smNotionalRatioScanPanel}
+      {createPortal(
+        <>
+          {errorOverlay}
+          {pendingOverlay}
+          {mainDetailDrawer}
+        </>,
+        document.body,
+      )}
     </>
   )
 }

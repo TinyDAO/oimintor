@@ -10,6 +10,7 @@ import {
 import type { SymbolInsight } from './lib/signals/compute'
 import {
   fetchSmartMoneyFuturesSignals,
+  fetchSmartMoneyOverviews,
   SMART_MONEY_TIME_RANGES,
   type SmartMoneyFuturesRow,
   type SmartMoneyTimeRange,
@@ -38,6 +39,26 @@ import {
   buildSmDirectionScanHits,
   type SmDirectionScanUiState,
 } from './lib/smDirectionScan'
+import {
+  rowsFromOverviews,
+  SM_NOTIONAL_RATIO_SCAN_TITLE,
+  type SmNotionalRatioScanUiState,
+} from './lib/smNotionalRatioScan'
+
+function labelSmRange(r: SmartMoneyTimeRange): string {
+  switch (r) {
+    case '30m':
+      return '30 分钟'
+    case '1h':
+      return '1 小时'
+    case '24h':
+      return '24 小时'
+    case '7d':
+      return '7 日'
+    default:
+      return r
+  }
+}
 
 const TOP_N_STORAGE_KEY = 'oi-monitor-top-n'
 const AUTO_REFRESH_STORAGE_KEY = 'oi-monitor-auto-refresh'
@@ -119,8 +140,11 @@ export default function App() {
   )
   const [smDirectionScan, setSmDirectionScan] =
     useState<SmDirectionScanUiState | null>(null)
+  const [smNotionalScan, setSmNotionalScan] =
+    useState<SmNotionalRatioScanUiState | null>(null)
   const scanAbortRef = useRef<AbortController | null>(null)
   const smScanAbortRef = useRef<AbortController | null>(null)
+  const smNotionalScanAbortRef = useRef<AbortController | null>(null)
   const smDetailAbortRef = useRef<AbortController | null>(null)
 
   /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿阈值变为上穿阈值，见 oiCrossAlert） */
@@ -181,11 +205,14 @@ export default function App() {
   const runVariantScanNetwork = useCallback(async () => {
     smScanAbortRef.current?.abort()
     smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
     const ac = new AbortController()
     scanAbortRef.current = ac
     const depth = topN
     setSelected(null)
     setSmDirectionScan(null)
+    setSmNotionalScan(null)
     setVariantScan({
       phase: 'loading',
       progress: `V4A/V7/V8 聚合扫描（Top ${depth}）…`,
@@ -262,10 +289,13 @@ export default function App() {
   const runSmDirectionScan = useCallback(async () => {
     scanAbortRef.current?.abort()
     scanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
     const ac = new AbortController()
     smScanAbortRef.current = ac
     setSelected(null)
     setVariantScan(null)
+    setSmNotionalScan(null)
     setSmDirectionScan({ phase: 'loading', progress: '拉取 24h 与 1h 聪明钱列表…' })
     try {
       const [rows24h, rows1h] = await Promise.all([
@@ -292,6 +322,83 @@ export default function App() {
     }
   }, [])
 
+  const runSmNotionalRatioScan = useCallback(async () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    const ac = new AbortController()
+    smNotionalScanAbortRef.current = ac
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    const tr = smRange
+    setSmNotionalScan({
+      phase: 'loading',
+      progress: `拉取聪明钱「${labelSmRange(tr)}」活跃合约列表…`,
+      timeRange: tr,
+    })
+    try {
+      const raw = await fetchSmartMoneyFuturesSignals(tr, ac.signal)
+      if (ac.signal.aborted) return
+      const symbols = Array.from(
+        new Set(raw.map((r) => r.symbol.toUpperCase())),
+      ).sort()
+      if (symbols.length === 0) {
+        setSmNotionalScan({
+          phase: 'done',
+          rows: [],
+          timeRange: tr,
+          doneAtMs: Date.now(),
+          failedCount: 0,
+          totalCount: 0,
+        })
+        return
+      }
+      setSmNotionalScan({
+        phase: 'loading',
+        progress: `逐合约拉取聪明钱总览快照 0/${symbols.length}…`,
+        timeRange: tr,
+      })
+      const { ok, failed } = await fetchSmartMoneyOverviews(
+        symbols,
+        (done, total) => {
+          setSmNotionalScan((s) =>
+            s?.phase === 'loading'
+              ? {
+                  ...s,
+                  progress: `逐合约拉取聪明钱总览快照 ${done}/${total}…`,
+                }
+              : s,
+          )
+        },
+        ac.signal,
+        8,
+      )
+      if (ac.signal.aborted) return
+      const rows = rowsFromOverviews(ok)
+      setSmNotionalScan({
+        phase: 'done',
+        rows,
+        timeRange: tr,
+        doneAtMs: Date.now(),
+        failedCount: failed.length,
+        totalCount: symbols.length,
+      })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      setSmNotionalScan({
+        phase: 'error',
+        error: e instanceof Error ? e.message : String(e),
+        timeRange: tr,
+      })
+    } finally {
+      if (smNotionalScanAbortRef.current === ac)
+        smNotionalScanAbortRef.current = null
+    }
+  }, [smRange])
+
   const openSmDirectionScanDrawer = useCallback(() => {
     void runSmDirectionScan()
   }, [runSmDirectionScan])
@@ -303,11 +410,14 @@ export default function App() {
   const openVariantScanDrawer = useCallback(() => {
     smScanAbortRef.current?.abort()
     smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
     const depth = topN
     const cached = readVariantScanCacheIfValid(depth)
     if (cached) {
       setSelected(null)
       setSmDirectionScan(null)
+      setSmNotionalScan(null)
       setVariantScan({
         phase: 'done',
         progress: '',
@@ -330,6 +440,8 @@ export default function App() {
     scanAbortRef.current = null
     smScanAbortRef.current?.abort()
     smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
     smDetailAbortRef.current?.abort()
     smDetailAbortRef.current = null
     setSelected(null)
@@ -337,6 +449,7 @@ export default function App() {
     setDetailOpenError(null)
     setVariantScan(null)
     setSmDirectionScan(null)
+    setSmNotionalScan(null)
   }
 
   /** 仅关闭合约详情 / 加载中 / 错误层；保留 V4/V7/V8 扫描抽屉 */
@@ -364,6 +477,7 @@ export default function App() {
     if (clearBackgroundScans) {
       setVariantScan(null)
       setSmDirectionScan(null)
+      setSmNotionalScan(null)
     }
     setDetailPendingSymbol(symbol)
     void loadSymbolInsight(symbol, ac.signal)
@@ -608,6 +722,19 @@ export default function App() {
               >
                 扫描 V4A/V7/V8
               </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={
+                  oiLoading ||
+                  smNotionalScan?.phase === 'loading' ||
+                  variantScan?.phase === 'loading'
+                }
+                onClick={() => void runSmNotionalRatioScan()}
+                title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：聪明钱多/空估算名义比；统计周期与「聪明钱」页一致（当前 ${labelSmRange(smRange)}）`}
+              >
+                {SM_NOTIONAL_RATIO_SCAN_TITLE}
+              </button>
               {typeof Notification !== 'undefined' &&
               Notification.permission === 'default' ? (
                 <button
@@ -654,7 +781,11 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-ghost"
-                disabled={smLoading || smDirectionScan?.phase === 'loading'}
+                disabled={
+                  smLoading ||
+                  smDirectionScan?.phase === 'loading' ||
+                  smNotionalScan?.phase === 'loading'
+                }
                 onClick={() => void openSmDirectionScanDrawer()}
                 title="拉取 24h 与 1h 聪明钱列表，筛出净方向相反合约，按两档净名义差排序"
               >
@@ -753,7 +884,10 @@ export default function App() {
             <SignalTable
               rows={tableRows}
               onSelect={
-                variantScan?.phase === 'loading' ? () => {} : setSelected
+                variantScan?.phase === 'loading' ||
+                smNotionalScan?.phase === 'loading'
+                  ? () => {}
+                  : setSelected
               }
             />
           </>
@@ -783,6 +917,7 @@ export default function App() {
         row={selected}
         variantScan={variantScan}
         smDirectionScan={smDirectionScan}
+        smNotionalRatioScan={smNotionalScan}
         pendingSymbol={detailPendingSymbol}
         openDetailError={detailOpenError}
         onCloseAllDrawers={closeDetailDrawer}
@@ -791,6 +926,8 @@ export default function App() {
         onRefreshVariantScan={refreshVariantScan}
         onPickFromSmDirectionScan={(sym) => openSmSymbolDetail(sym, false)}
         onRefreshSmDirectionScan={refreshSmDirectionScan}
+        onPickFromSmNotionalRatioScan={(sym) => openSmSymbolDetail(sym, false)}
+        onRefreshSmNotionalRatioScan={() => void runSmNotionalRatioScan()}
       />
     </div>
   )
