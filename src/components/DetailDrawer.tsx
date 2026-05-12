@@ -52,6 +52,12 @@ import {
   type SmNotionalRatioScanUiState,
 } from '../lib/smNotionalRatioScan'
 import { SmNotionalRatioScanTable } from './SmNotionalRatioScanTable'
+import {
+  SM_OVERVIEW_VALUE_MIN_NOTIONAL,
+  SM_OVERVIEW_VALUE_SCAN_TITLE,
+  type SmOverviewValueScanUiState,
+} from '../lib/smOverviewValueScan'
+import { SmOverviewValueScanTable } from './SmOverviewValueScanTable'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 import {
@@ -169,6 +175,7 @@ export function DetailDrawer({
   variantScan,
   smDirectionScan,
   smNotionalRatioScan,
+  smOverviewValueScan,
   pendingSymbol,
   openDetailError,
   onCloseAllDrawers,
@@ -179,11 +186,14 @@ export function DetailDrawer({
   onRefreshSmDirectionScan,
   onPickFromSmNotionalRatioScan,
   onRefreshSmNotionalRatioScan,
+  onPickFromSmOverviewValueScan,
+  onRefreshSmOverviewValueScan,
 }: {
   row: SymbolInsight | null
   variantScan: VariantScanUiState | null
   smDirectionScan: SmDirectionScanUiState | null
   smNotionalRatioScan: SmNotionalRatioScanUiState | null
+  smOverviewValueScan: SmOverviewValueScanUiState | null
   /** 单合约详情拉取中（如从聪明钱列表打开） */
   pendingSymbol?: string | null
   openDetailError?: string | null
@@ -199,6 +209,8 @@ export function DetailDrawer({
   onRefreshSmDirectionScan: () => void
   onPickFromSmNotionalRatioScan: (symbol: string) => void
   onRefreshSmNotionalRatioScan: () => void
+  onPickFromSmOverviewValueScan: (symbol: string) => void
+  onRefreshSmOverviewValueScan: () => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -385,7 +397,7 @@ export function DetailDrawer({
   }, [displayRow])
 
   const hasScan = Boolean(
-    variantScan || smDirectionScan || smNotionalRatioScan,
+    variantScan || smDirectionScan || smNotionalRatioScan || smOverviewValueScan,
   )
   const hasTopOverlay = Boolean(
     row || pendingSymbol || openDetailError,
@@ -741,6 +753,104 @@ export function DetailDrawer({
                   <SmNotionalRatioScanTable
                     rows={smNotionalRatioScan.rows}
                     onOpenDetail={onPickFromSmNotionalRatioScan}
+                  />
+                </>
+              )}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    ) : null
+
+  const smOverviewValueScanPanel =
+    smOverviewValueScan ? (
+      <div
+        className="drawer-backdrop drawer-stack-base"
+        onClick={onCloseAllDrawers}
+      >
+        <aside
+          className="drawer drawer-variant-scan"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label={`${SM_OVERVIEW_VALUE_SCAN_TITLE} 扫描`}
+          aria-busy={smOverviewValueScan.phase === 'loading'}
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>聪明钱 · {SM_OVERVIEW_VALUE_SCAN_TITLE}</h2>
+              <p className="muted small">
+                扫描 Binance USDT-M 全部交易中永续合约的 smart money overview，
+                筛出大户分桶多单或空单估算名义超过 {fmtSmUsd(SM_OVERVIEW_VALUE_MIN_NOTIONAL)}
+                的合约；结果按本地日期缓存，今天覆盖，并与昨天同侧列表对比标出 NEW。
+              </p>
+              {smOverviewValueScan.phase === 'done' ? (
+                <p className="muted small drawer-variant-cache-line">
+                  完成时间 ·{' '}
+                  {formatVariantScanSnapshot(
+                    smOverviewValueScan.result.today.scannedAtMs,
+                  )}
+                  {smOverviewValueScan.result.yesterday
+                    ? ` · 已对比 ${smOverviewValueScan.result.yesterday.dateKey}`
+                    : ' · 暂无昨天缓存'}
+                </p>
+              ) : null}
+            </div>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={smOverviewValueScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshSmOverviewValueScan()
+                }}
+                title="重新扫描全部 USDT-M 永续 overview，并覆盖今天缓存"
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
+          </header>
+          {smOverviewValueScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {smOverviewValueScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {smOverviewValueScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {smOverviewValueScan.error}
+              </p>
+            </section>
+          ) : null}
+          {smOverviewValueScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {smOverviewValueScan.result.today.longRows.length === 0 &&
+              smOverviewValueScan.result.today.shortRows.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  本次扫描未发现多单或空单大户名义超过 {fmtSmUsd(SM_OVERVIEW_VALUE_MIN_NOTIONAL)}
+                  的合约。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small" style={{ marginTop: 0 }}>
+                    共扫描 {smOverviewValueScan.result.today.totalCount}{' '}
+                    个合约（{smOverviewValueScan.result.today.failedCount > 0
+                      ? `${smOverviewValueScan.result.today.failedCount} 个 overview 拉取失败已跳过`
+                      : 'overview 全部成功'}）；点击行打开合约详情（列表保留）。
+                  </p>
+                  <SmOverviewValueScanTable
+                    longRows={smOverviewValueScan.result.today.longRows}
+                    shortRows={smOverviewValueScan.result.today.shortRows}
+                    onOpenDetail={onPickFromSmOverviewValueScan}
                   />
                 </>
               )}
@@ -1113,6 +1223,7 @@ export function DetailDrawer({
       {variantScanPanel}
       {smDirectionScanPanel}
       {smNotionalRatioScanPanel}
+      {smOverviewValueScanPanel}
       {createPortal(
         <>
           {errorOverlay}

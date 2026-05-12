@@ -1007,6 +1007,29 @@ body::before {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.sm-scan-tabs {
+  margin: 0 0 0.65rem;
+}
+
+.sm-overview-value-table .sym {
+  margin-right: 0.4rem;
+}
+
+.sm-scan-new-badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  padding: 0.08rem 0.34rem;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .drawer-variant-bottom {
   margin-top: 0.35rem;
   padding-top: 0.65rem;

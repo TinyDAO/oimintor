@@ -15,6 +15,8 @@ import {
   type SmartMoneyFuturesRow,
   type SmartMoneyTimeRange,
 } from './lib/api/smartMoneyFutures'
+import { fetchExchangeInfo } from './lib/api/futures'
+import { perpetualUsdtSymbols } from './lib/binance/universe'
 import {
   findOiCrossesAboveThreshold,
   notifyOiCrossesDesktop,
@@ -44,6 +46,13 @@ import {
   SM_NOTIONAL_RATIO_SCAN_TITLE,
   type SmNotionalRatioScanUiState,
 } from './lib/smNotionalRatioScan'
+import {
+  buildSmOverviewValueSnapshot,
+  readTodaySmOverviewValueScanCache,
+  saveSmOverviewValueScan,
+  SM_OVERVIEW_VALUE_SCAN_TITLE,
+  type SmOverviewValueScanUiState,
+} from './lib/smOverviewValueScan'
 
 function labelSmRange(r: SmartMoneyTimeRange): string {
   switch (r) {
@@ -142,9 +151,12 @@ export default function App() {
     useState<SmDirectionScanUiState | null>(null)
   const [smNotionalScan, setSmNotionalScan] =
     useState<SmNotionalRatioScanUiState | null>(null)
+  const [smOverviewValueScan, setSmOverviewValueScan] =
+    useState<SmOverviewValueScanUiState | null>(null)
   const scanAbortRef = useRef<AbortController | null>(null)
   const smScanAbortRef = useRef<AbortController | null>(null)
   const smNotionalScanAbortRef = useRef<AbortController | null>(null)
+  const smOverviewValueScanAbortRef = useRef<AbortController | null>(null)
   const smDetailAbortRef = useRef<AbortController | null>(null)
 
   /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿阈值变为上穿阈值，见 oiCrossAlert） */
@@ -207,12 +219,15 @@ export default function App() {
     smScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
     const ac = new AbortController()
     scanAbortRef.current = ac
     const depth = topN
     setSelected(null)
     setSmDirectionScan(null)
     setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
     setVariantScan({
       phase: 'loading',
       progress: `V4A/V7/V8 聚合扫描（Top ${depth}）…`,
@@ -291,11 +306,14 @@ export default function App() {
     scanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
     const ac = new AbortController()
     smScanAbortRef.current = ac
     setSelected(null)
     setVariantScan(null)
     setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
     setSmDirectionScan({ phase: 'loading', progress: '拉取 24h 与 1h 聪明钱列表…' })
     try {
       const [rows24h, rows1h] = await Promise.all([
@@ -327,12 +345,15 @@ export default function App() {
     scanAbortRef.current = null
     smScanAbortRef.current?.abort()
     smScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     const ac = new AbortController()
     smNotionalScanAbortRef.current = ac
     setSelected(null)
     setVariantScan(null)
     setSmDirectionScan(null)
+    setSmOverviewValueScan(null)
     const tr = smRange
     setSmNotionalScan({
       phase: 'loading',
@@ -399,6 +420,69 @@ export default function App() {
     }
   }, [smRange])
 
+  const runSmOverviewValueScan = useCallback(async () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    const ac = new AbortController()
+    smOverviewValueScanAbortRef.current = ac
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    setSmNotionalScan(null)
+    setSmOverviewValueScan({
+      phase: 'loading',
+      progress: '加载 Binance USDT-M 永续合约列表…',
+    })
+    try {
+      const info = await fetchExchangeInfo()
+      if (ac.signal.aborted) return
+      const symbols = Array.from(perpetualUsdtSymbols(info.symbols)).sort()
+      setSmOverviewValueScan({
+        phase: 'loading',
+        progress: `逐合约拉取聪明钱总览快照 0/${symbols.length}…`,
+      })
+      const { ok, failed } = await fetchSmartMoneyOverviews(
+        symbols,
+        (done, total) => {
+          setSmOverviewValueScan((s) =>
+            s?.phase === 'loading'
+              ? {
+                  ...s,
+                  progress: `逐合约拉取聪明钱总览快照 ${done}/${total}…`,
+                }
+              : s,
+          )
+        },
+        ac.signal,
+        8,
+      )
+      if (ac.signal.aborted) return
+      const snapshot = buildSmOverviewValueSnapshot(
+        ok,
+        symbols.length,
+        failed.length,
+      )
+      setSmOverviewValueScan({
+        phase: 'done',
+        result: saveSmOverviewValueScan(snapshot),
+      })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      setSmOverviewValueScan({
+        phase: 'error',
+        error: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      if (smOverviewValueScanAbortRef.current === ac)
+        smOverviewValueScanAbortRef.current = null
+    }
+  }, [])
+
   const openSmDirectionScanDrawer = useCallback(() => {
     void runSmDirectionScan()
   }, [runSmDirectionScan])
@@ -407,17 +491,46 @@ export default function App() {
     void runSmDirectionScan()
   }, [runSmDirectionScan])
 
+  const openSmOverviewValueScanDrawer = useCallback(() => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
+
+    const cached = readTodaySmOverviewValueScanCache()
+    if (cached) {
+      setSelected(null)
+      setVariantScan(null)
+      setSmDirectionScan(null)
+      setSmNotionalScan(null)
+      setSmOverviewValueScan({
+        phase: 'done',
+        result: cached,
+      })
+      return
+    }
+
+    void runSmOverviewValueScan()
+  }, [runSmOverviewValueScan])
+
   const openVariantScanDrawer = useCallback(() => {
     smScanAbortRef.current?.abort()
     smScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
     const depth = topN
     const cached = readVariantScanCacheIfValid(depth)
     if (cached) {
       setSelected(null)
       setSmDirectionScan(null)
       setSmNotionalScan(null)
+      setSmOverviewValueScan(null)
       setVariantScan({
         phase: 'done',
         progress: '',
@@ -442,6 +555,8 @@ export default function App() {
     smScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
     smDetailAbortRef.current?.abort()
     smDetailAbortRef.current = null
     setSelected(null)
@@ -450,6 +565,7 @@ export default function App() {
     setVariantScan(null)
     setSmDirectionScan(null)
     setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
   }
 
   /** 仅关闭合约详情 / 加载中 / 错误层；保留 V4/V7/V8 扫描抽屉 */
@@ -478,6 +594,7 @@ export default function App() {
       setVariantScan(null)
       setSmDirectionScan(null)
       setSmNotionalScan(null)
+      setSmOverviewValueScan(null)
     }
     setDetailPendingSymbol(symbol)
     void loadSymbolInsight(symbol, ac.signal)
@@ -716,7 +833,12 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-ghost"
-                disabled={oiLoading || variantScan?.phase === 'loading'}
+                disabled={
+                  oiLoading ||
+                  variantScan?.phase === 'loading' ||
+                  smNotionalScan?.phase === 'loading' ||
+                  smOverviewValueScan?.phase === 'loading'
+                }
                 onClick={() => void openVariantScanDrawer()}
                 title={`按当前榜单深度 Top ${topN} 打开扫描；若有 24h 内缓存则直接展示，否则拉榜并校验 V4A/V7/V8`}
               >
@@ -728,12 +850,27 @@ export default function App() {
                 disabled={
                   oiLoading ||
                   smNotionalScan?.phase === 'loading' ||
+                  smOverviewValueScan?.phase === 'loading' ||
                   variantScan?.phase === 'loading'
                 }
                 onClick={() => void runSmNotionalRatioScan()}
                 title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：聪明钱多/空估算名义比；统计周期与「聪明钱」页一致（当前 ${labelSmRange(smRange)}）`}
               >
                 {SM_NOTIONAL_RATIO_SCAN_TITLE}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={
+                  oiLoading ||
+                  smNotionalScan?.phase === 'loading' ||
+                  smOverviewValueScan?.phase === 'loading' ||
+                  variantScan?.phase === 'loading'
+                }
+                onClick={() => void openSmOverviewValueScanDrawer()}
+                title={`${SM_OVERVIEW_VALUE_SCAN_TITLE}：优先打开今天缓存；无缓存时扫描全部 USDT-M 永续 overview，筛出多单/空单大户价值超过 $8M 的合约，并与昨天缓存对比标记 NEW`}
+              >
+                {SM_OVERVIEW_VALUE_SCAN_TITLE}
               </button>
               {typeof Notification !== 'undefined' &&
               Notification.permission === 'default' ? (
@@ -885,7 +1022,8 @@ export default function App() {
               rows={tableRows}
               onSelect={
                 variantScan?.phase === 'loading' ||
-                smNotionalScan?.phase === 'loading'
+                smNotionalScan?.phase === 'loading' ||
+                smOverviewValueScan?.phase === 'loading'
                   ? () => {}
                   : setSelected
               }
@@ -918,6 +1056,7 @@ export default function App() {
         variantScan={variantScan}
         smDirectionScan={smDirectionScan}
         smNotionalRatioScan={smNotionalScan}
+        smOverviewValueScan={smOverviewValueScan}
         pendingSymbol={detailPendingSymbol}
         openDetailError={detailOpenError}
         onCloseAllDrawers={closeDetailDrawer}
@@ -928,6 +1067,8 @@ export default function App() {
         onRefreshSmDirectionScan={refreshSmDirectionScan}
         onPickFromSmNotionalRatioScan={(sym) => openSmSymbolDetail(sym, false)}
         onRefreshSmNotionalRatioScan={() => void runSmNotionalRatioScan()}
+        onPickFromSmOverviewValueScan={(sym) => openSmSymbolDetail(sym, false)}
+        onRefreshSmOverviewValueScan={() => void runSmOverviewValueScan()}
       />
     </div>
   )
