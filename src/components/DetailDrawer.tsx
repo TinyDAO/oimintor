@@ -779,9 +779,7 @@ export function DetailDrawer({
             <div>
               <h2>聪明钱 · {SM_OVERVIEW_VALUE_SCAN_TITLE}</h2>
               <p className="muted small">
-                扫描 Binance USDT-M 全部交易中永续合约的 smart money overview，
-                筛出大户分桶多单或空单估算名义超过 {fmtSmUsd(SM_OVERVIEW_VALUE_MIN_NOTIONAL)}
-                的合约；结果按本地日期缓存，今天覆盖，并与昨天同侧列表对比标出 NEW。
+                相信自己还是相信聪明钱
               </p>
               {smOverviewValueScan.phase === 'done' ? (
                 <p className="muted small drawer-variant-cache-line">
@@ -845,7 +843,7 @@ export function DetailDrawer({
                     共扫描 {smOverviewValueScan.result.today.totalCount}{' '}
                     个合约（{smOverviewValueScan.result.today.failedCount > 0
                       ? `${smOverviewValueScan.result.today.failedCount} 个 overview 拉取失败已跳过`
-                      : 'overview 全部成功'}）；点击行打开合约详情（列表保留）。
+                      : 'overview 全部成功'}）；与昨天同侧价值差距 2M+ 或 10%+ 会标 Δ，实际反向仓位更大时行底为红色。
                   </p>
                   <SmOverviewValueScanTable
                     longRows={smOverviewValueScan.result.today.longRows}

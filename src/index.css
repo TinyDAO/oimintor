@@ -1015,6 +1015,14 @@ body::before {
   margin-right: 0.4rem;
 }
 
+.sm-overview-value-table tbody tr.sm-scan-inverted {
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.sm-overview-value-table tbody tr.sm-scan-inverted:hover {
+  background: rgba(251, 113, 133, 0.16);
+}
+
 .sm-scan-new-badge {
   display: inline-flex;
   align-items: center;
@@ -1028,6 +1036,31 @@ body::before {
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+}
+
+.sm-scan-diff-badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  padding: 0.08rem 0.34rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.sm-scan-diff-badge--up {
+  border: 1px solid rgba(94, 234, 212, 0.42);
+  background: rgba(94, 234, 212, 0.13);
+  color: var(--accent);
+}
+
+.sm-scan-diff-badge--down {
+  border: 1px solid rgba(251, 113, 133, 0.42);
+  background: rgba(251, 113, 133, 0.13);
+  color: var(--danger);
 }
 
 .drawer-variant-bottom {

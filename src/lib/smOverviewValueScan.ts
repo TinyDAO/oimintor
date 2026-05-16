@@ -4,7 +4,9 @@ import {
 } from './api/smartMoneyFutures'
 
 export const SM_OVERVIEW_VALUE_SCAN_TITLE = '聪明扫描'
-export const SM_OVERVIEW_VALUE_MIN_NOTIONAL = 8_000_000
+export const SM_OVERVIEW_VALUE_MIN_NOTIONAL = 5_000_000
+export const SM_OVERVIEW_VALUE_DIFF_MARK_NOTIONAL = 2_000_000
+export const SM_OVERVIEW_VALUE_DIFF_MARK_RATIO = 0.1
 
 const STORAGE_KEY = 'oi-monitor-sm-overview-value-scan-v1'
 
@@ -22,6 +24,10 @@ export type SmOverviewValueScanRow = {
   longTraders: number
   shortTraders: number
   isNew: boolean
+  yesterdayNotional?: number
+  deltaFromYesterday?: number
+  deltaPctFromYesterday?: number
+  hasLargeDiff?: boolean
 }
 
 export type SmOverviewValueScanDaySnapshot = {
@@ -166,22 +172,44 @@ function withNewFlags(
   if (!yesterday) {
     return {
       ...today,
-      longRows: today.longRows.map((r) => ({ ...r, isNew: false })),
-      shortRows: today.shortRows.map((r) => ({ ...r, isNew: false })),
+      longRows: today.longRows.map((r) => ({
+        ...r,
+        isNew: false,
+        hasLargeDiff: false,
+      })),
+      shortRows: today.shortRows.map((r) => ({
+        ...r,
+        isNew: false,
+        hasLargeDiff: false,
+      })),
     }
   }
-  const prevLong = new Set(yesterday?.longRows.map((r) => r.symbol) ?? [])
-  const prevShort = new Set(yesterday?.shortRows.map((r) => r.symbol) ?? [])
+  const prevLong = new Map(yesterday.longRows.map((r) => [r.symbol, r]))
+  const prevShort = new Map(yesterday.shortRows.map((r) => [r.symbol, r]))
+  function withYesterdayDiff(
+    r: Omit<SmOverviewValueScanRow, 'isNew'>,
+    prevRows: Map<string, Omit<SmOverviewValueScanRow, 'isNew'>>,
+  ): SmOverviewValueScanRow {
+    const prev = prevRows.get(r.symbol)
+    if (!prev) return { ...r, isNew: true, hasLargeDiff: false }
+    const delta = r.notional - prev.notional
+    const prevAbs = Math.abs(prev.notional)
+    const deltaPct = prevAbs > 0 ? delta / prevAbs : 0
+    return {
+      ...r,
+      isNew: false,
+      yesterdayNotional: prev.notional,
+      deltaFromYesterday: delta,
+      deltaPctFromYesterday: deltaPct,
+      hasLargeDiff:
+        Math.abs(delta) >= SM_OVERVIEW_VALUE_DIFF_MARK_NOTIONAL ||
+        Math.abs(deltaPct) >= SM_OVERVIEW_VALUE_DIFF_MARK_RATIO,
+    }
+  }
   return {
     ...today,
-    longRows: today.longRows.map((r) => ({
-      ...r,
-      isNew: !prevLong.has(r.symbol),
-    })),
-    shortRows: today.shortRows.map((r) => ({
-      ...r,
-      isNew: !prevShort.has(r.symbol),
-    })),
+    longRows: today.longRows.map((r) => withYesterdayDiff(r, prevLong)),
+    shortRows: today.shortRows.map((r) => withYesterdayDiff(r, prevShort)),
   }
 }
 

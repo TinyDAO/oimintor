@@ -868,7 +868,7 @@ export default function App() {
                   variantScan?.phase === 'loading'
                 }
                 onClick={() => void openSmOverviewValueScanDrawer()}
-                title={`${SM_OVERVIEW_VALUE_SCAN_TITLE}：优先打开今天缓存；无缓存时扫描全部 USDT-M 永续 overview，筛出多单/空单大户价值超过 $8M 的合约，并与昨天缓存对比标记 NEW`}
+                title={`${SM_OVERVIEW_VALUE_SCAN_TITLE}：优先打开今天缓存；无缓存时扫描全部 USDT-M 永续 overview，筛出多单/空单大户价值超过 $5M 的合约，并与昨天缓存对比标记 NEW`}
               >
                 {SM_OVERVIEW_VALUE_SCAN_TITLE}
               </button>
