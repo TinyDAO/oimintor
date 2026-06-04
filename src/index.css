@@ -1008,7 +1008,16 @@ body::before {
 }
 
 .sm-scan-tabs {
+  align-items: center;
   margin: 0 0 0.65rem;
+}
+
+.sm-scan-filter {
+  margin-left: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .sm-overview-value-table .sym {
@@ -1061,6 +1070,39 @@ body::before {
   border: 1px solid rgba(251, 113, 133, 0.42);
   background: rgba(251, 113, 133, 0.13);
   color: var(--danger);
+}
+
+.sm-scan-delisted {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.sm-scan-delisted-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.55rem;
+}
+
+.sm-scan-delisted-head h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--danger);
+}
+
+.sm-scan-delisted-head p {
+  margin: 0;
+}
+
+.sm-scan-delisted-table tbody tr {
+  background: rgba(251, 191, 36, 0.045);
+}
+
+.sm-scan-delisted-table tbody tr:hover {
+  background: rgba(251, 191, 36, 0.09);
 }
 
 .drawer-variant-bottom {
@@ -1453,6 +1495,181 @@ a.alpha-link {
 
 a.alpha-link:hover {
   text-decoration: underline;
+}
+
+.contract-analysis-trigger {
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.34rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--warn);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+  vertical-align: 0.08em;
+}
+
+.contract-analysis-trigger:hover {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 70%, var(--border));
+}
+
+.contract-analysis-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, 0.74);
+  animation: fade 0.2s ease;
+}
+
+.contract-analysis-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  height: min(82vh, 860px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.5);
+}
+
+.contract-analysis-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--warn) 8%, transparent),
+    transparent
+  );
+}
+
+.contract-analysis-head h2 {
+  margin: 0 0 0.15rem;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.contract-analysis-head p {
+  margin: 0;
+}
+
+.contract-analysis-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+}
+
+.contract-analysis-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.9rem 1rem 1.1rem;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.contract-analysis-state {
+  margin-bottom: 0.75rem;
+}
+
+.contract-analysis-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+}
+
+.contract-analysis-summary > div {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+}
+
+.contract-analysis-summary span {
+  display: block;
+  margin-bottom: 0.16rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.contract-analysis-summary strong {
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.contract-analysis-section {
+  margin-top: 0.95rem;
+}
+
+.contract-analysis-section h3 {
+  margin: 0 0 0.42rem;
+  font-size: 0.9rem;
+}
+
+.contract-analysis-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.contract-analysis-pager {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.contract-analysis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+}
+
+.contract-analysis-table th,
+.contract-analysis-table td {
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.contract-analysis-table th {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.contract-analysis-table-wide {
+  min-width: 760px;
+}
+
+@media (max-width: 760px) {
+  .contract-analysis-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contract-analysis-head {
+    flex-direction: column;
+  }
 }
 
 /* —— 手机端：压缩表格行高与工具栏，避免单行过高 —— */

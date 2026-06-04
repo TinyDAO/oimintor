@@ -9,6 +9,7 @@ export const SM_OVERVIEW_VALUE_DIFF_MARK_NOTIONAL = 2_000_000
 export const SM_OVERVIEW_VALUE_DIFF_MARK_RATIO = 0.1
 
 const STORAGE_KEY = 'oi-monitor-sm-overview-value-scan-v1'
+const RETAIN_DAYS = 5
 
 export type SmOverviewValueSide = 'long' | 'short'
 
@@ -35,8 +36,26 @@ export type SmOverviewValueScanDaySnapshot = {
   scannedAtMs: number
   longRows: Omit<SmOverviewValueScanRow, 'isNew'>[]
   shortRows: Omit<SmOverviewValueScanRow, 'isNew'>[]
+  allRows?: SmOverviewValueCurrentRow[]
   totalCount: number
   failedCount: number
+}
+
+export type SmOverviewValueCurrentRow = {
+  symbol: string
+  longNotional: number
+  shortNotional: number
+}
+
+export type SmOverviewValueDelistedRow = {
+  symbol: string
+  side: SmOverviewValueSide
+  lastSeenDateKey: string
+  lastSeenAtMs: number
+  lastNotional: number
+  currentNotional: number
+  deltaFromLastSeen: number
+  deltaPctFromLastSeen?: number
 }
 
 export type SmOverviewValueScanResult = {
@@ -45,9 +64,11 @@ export type SmOverviewValueScanResult = {
     scannedAtMs: number
     longRows: SmOverviewValueScanRow[]
     shortRows: SmOverviewValueScanRow[]
+    delistedRows: SmOverviewValueDelistedRow[]
     totalCount: number
     failedCount: number
   }
+  compareDays: SmOverviewValueScanDaySnapshot[]
   yesterday?: SmOverviewValueScanDaySnapshot
 }
 
@@ -84,6 +105,21 @@ function previousDateKey(dateKey: string): string {
   return dateKeyFromMs(dt.getTime())
 }
 
+function dateKeyToTime(dateKey: string): number {
+  const [y, m, d] = dateKey.split('-').map((x) => parseInt(x, 10))
+  return new Date(y, m - 1, d).getTime()
+}
+
+function daysBetween(a: string, b: string): number {
+  const dayMs = 24 * 60 * 60 * 1000
+  return Math.round((dateKeyToTime(a) - dateKeyToTime(b)) / dayMs)
+}
+
+function isInRetainWindow(dateKey: string, todayKey: string): boolean {
+  const diff = daysBetween(todayKey, dateKey)
+  return diff >= 0 && diff < RETAIN_DAYS
+}
+
 function parseStoredScan(raw: string | null): StoredScan {
   if (!raw) return { days: [] }
   try {
@@ -99,6 +135,10 @@ function parseStoredScan(raw: string | null): StoredScan {
             Array.isArray(d.shortRows)
           )
         })
+        .map((d) => ({
+          ...d,
+          allRows: Array.isArray(d.allRows) ? d.allRows : undefined,
+        }))
         .sort((a, b) => b.dateKey.localeCompare(a.dateKey)),
     }
   } catch {
@@ -142,11 +182,17 @@ export function buildSmOverviewValueSnapshot(
 ): SmOverviewValueScanDaySnapshot {
   const longRows: Omit<SmOverviewValueScanRow, 'isNew'>[] = []
   const shortRows: Omit<SmOverviewValueScanRow, 'isNew'>[] = []
+  const allRows: SmOverviewValueCurrentRow[] = []
 
   for (const { symbol, data } of list) {
     const normalized = { ...data, symbol: (data.symbol || symbol).toUpperCase() }
     const longNotional = overviewSideNotional(normalized, 'long')
     const shortNotional = overviewSideNotional(normalized, 'short')
+    allRows.push({
+      symbol: normalized.symbol,
+      longNotional,
+      shortNotional,
+    })
     if (longNotional >= SM_OVERVIEW_VALUE_MIN_NOTIONAL) {
       longRows.push(rowForSide(normalized, 'long'))
     }
@@ -160,15 +206,101 @@ export function buildSmOverviewValueSnapshot(
     scannedAtMs: nowMs,
     longRows: sortRows(longRows),
     shortRows: sortRows(shortRows),
+    allRows: sortRows(allRows.map((r) => ({ ...r, notional: Math.max(r.longNotional, r.shortNotional) }))).map(
+      ({ symbol, longNotional, shortNotional }) => ({
+        symbol,
+        longNotional,
+        shortNotional,
+      }),
+    ),
     totalCount,
     failedCount,
   }
 }
 
-function withNewFlags(
+function sideNotional(
+  r: SmOverviewValueCurrentRow,
+  side: SmOverviewValueSide,
+): number {
+  return side === 'long' ? r.longNotional : r.shortNotional
+}
+
+function currentRowsMap(
+  snapshot: SmOverviewValueScanDaySnapshot,
+): Map<string, SmOverviewValueCurrentRow> {
+  return new Map((snapshot.allRows ?? []).map((r) => [r.symbol, r]))
+}
+
+function rowsForSide(
+  snapshot: SmOverviewValueScanDaySnapshot,
+  side: SmOverviewValueSide,
+): Omit<SmOverviewValueScanRow, 'isNew'>[] {
+  return side === 'long' ? snapshot.longRows : snapshot.shortRows
+}
+
+function buildDelistedRows(
   today: SmOverviewValueScanDaySnapshot,
-  yesterday?: SmOverviewValueScanDaySnapshot,
+  compareDays: SmOverviewValueScanDaySnapshot[],
+): SmOverviewValueDelistedRow[] {
+  const currentMap = currentRowsMap(today)
+  const out: SmOverviewValueDelistedRow[] = []
+
+  for (const side of ['long', 'short'] as const) {
+    const todaySymbols = new Set(rowsForSide(today, side).map((r) => r.symbol))
+    const latestBySymbol = new Map<
+      string,
+      {
+        day: SmOverviewValueScanDaySnapshot
+        row: Omit<SmOverviewValueScanRow, 'isNew'>
+      }
+    >()
+
+    for (const day of compareDays) {
+      for (const row of rowsForSide(day, side)) {
+        if (todaySymbols.has(row.symbol)) continue
+        const existing = latestBySymbol.get(row.symbol)
+        if (!existing || day.dateKey > existing.day.dateKey) {
+          latestBySymbol.set(row.symbol, { day, row })
+        }
+      }
+    }
+
+    for (const { day, row } of latestBySymbol.values()) {
+      const current = currentMap.get(row.symbol)
+      if (!current) continue
+      const currentNotional = sideNotional(current, side)
+      const delta = currentNotional - row.notional
+      const lastAbs = Math.abs(row.notional)
+      out.push({
+        symbol: row.symbol,
+        side,
+        lastSeenDateKey: day.dateKey,
+        lastSeenAtMs: day.scannedAtMs,
+        lastNotional: row.notional,
+        currentNotional,
+        deltaFromLastSeen: delta,
+        deltaPctFromLastSeen: lastAbs > 0 ? delta / lastAbs : undefined,
+      })
+    }
+  }
+
+  out.sort((a, b) => {
+    if (b.lastSeenDateKey !== a.lastSeenDateKey) {
+      return b.lastSeenDateKey.localeCompare(a.lastSeenDateKey)
+    }
+    const absDiff = Math.abs(b.deltaFromLastSeen) - Math.abs(a.deltaFromLastSeen)
+    if (absDiff !== 0) return absDiff
+    return a.symbol.localeCompare(b.symbol)
+  })
+  return out
+}
+
+function withHistoryFlags(
+  today: SmOverviewValueScanDaySnapshot,
+  compareDays: SmOverviewValueScanDaySnapshot[],
 ): SmOverviewValueScanResult['today'] {
+  const yesterday = compareDays[0]
+  const delistedRows = buildDelistedRows(today, compareDays)
   if (!yesterday) {
     return {
       ...today,
@@ -182,6 +314,7 @@ function withNewFlags(
         isNew: false,
         hasLargeDiff: false,
       })),
+      delistedRows,
     }
   }
   const prevLong = new Map(yesterday.longRows.map((r) => [r.symbol, r]))
@@ -210,6 +343,7 @@ function withNewFlags(
     ...today,
     longRows: today.longRows.map((r) => withYesterdayDiff(r, prevLong)),
     shortRows: today.shortRows.map((r) => withYesterdayDiff(r, prevShort)),
+    delistedRows,
   }
 }
 
@@ -217,17 +351,22 @@ export function saveSmOverviewValueScan(
   snapshot: SmOverviewValueScanDaySnapshot,
 ): SmOverviewValueScanResult {
   if (typeof localStorage === 'undefined') {
-    return { today: withNewFlags(snapshot), yesterday: undefined }
+    return { today: withHistoryFlags(snapshot, []), compareDays: [] }
   }
 
   const todayKey = snapshot.dateKey
   const yesterdayKey = previousDateKey(todayKey)
   const stored = parseStoredScan(localStorage.getItem(STORAGE_KEY))
   const yesterday = stored.days.find((d) => d.dateKey === yesterdayKey)
+  const compareDays = stored.days.filter(
+    (d) => d.dateKey < todayKey && isInRetainWindow(d.dateKey, todayKey),
+  )
   const days = [
     snapshot,
-    ...stored.days.filter((d) => d.dateKey === yesterdayKey),
-  ].slice(0, 2)
+    ...stored.days.filter(
+      (d) => d.dateKey !== todayKey && isInRetainWindow(d.dateKey, todayKey),
+    ),
+  ].slice(0, RETAIN_DAYS)
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ days }))
@@ -236,7 +375,8 @@ export function saveSmOverviewValueScan(
   }
 
   return {
-    today: withNewFlags(snapshot, yesterday),
+    today: withHistoryFlags(snapshot, compareDays),
+    compareDays,
     yesterday,
   }
 }
@@ -251,10 +391,15 @@ export function readTodaySmOverviewValueScanCache(
   const stored = parseStoredScan(localStorage.getItem(STORAGE_KEY))
   const today = stored.days.find((d) => d.dateKey === todayKey)
   if (!today) return null
+  if (!Array.isArray(today.allRows)) return null
 
   const yesterday = stored.days.find((d) => d.dateKey === yesterdayKey)
+  const compareDays = stored.days.filter(
+    (d) => d.dateKey < todayKey && isInRetainWindow(d.dateKey, todayKey),
+  )
   return {
-    today: withNewFlags(today, yesterday),
+    today: withHistoryFlags(today, compareDays),
+    compareDays,
     yesterday,
   }
 }

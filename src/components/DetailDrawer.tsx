@@ -832,7 +832,8 @@ export function DetailDrawer({
           {smOverviewValueScan.phase === 'done' ? (
             <section className="drawer-section">
               {smOverviewValueScan.result.today.longRows.length === 0 &&
-              smOverviewValueScan.result.today.shortRows.length === 0 ? (
+              smOverviewValueScan.result.today.shortRows.length === 0 &&
+              smOverviewValueScan.result.today.delistedRows.length === 0 ? (
                 <p className="muted small" style={{ marginTop: 0 }}>
                   本次扫描未发现多单或空单大户名义超过 {fmtSmUsd(SM_OVERVIEW_VALUE_MIN_NOTIONAL)}
                   的合约。
@@ -843,11 +844,12 @@ export function DetailDrawer({
                     共扫描 {smOverviewValueScan.result.today.totalCount}{' '}
                     个合约（{smOverviewValueScan.result.today.failedCount > 0
                       ? `${smOverviewValueScan.result.today.failedCount} 个 overview 拉取失败已跳过`
-                      : 'overview 全部成功'}）；与昨天同侧价值差距 2M+ 或 10%+ 会标 Δ，实际反向仓位更大时行底为红色。
+                      : 'overview 全部成功'}）；保留 5 天快照，与过去 4 天对比；今天未上榜但历史上榜的会列在底部。
                   </p>
                   <SmOverviewValueScanTable
                     longRows={smOverviewValueScan.result.today.longRows}
                     shortRows={smOverviewValueScan.result.today.shortRows}
+                    delistedRows={smOverviewValueScan.result.today.delistedRows}
                     onOpenDetail={onPickFromSmOverviewValueScan}
                   />
                 </>
