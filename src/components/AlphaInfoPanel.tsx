@@ -1,5 +1,7 @@
 import type { AlphaToken } from '../lib/api/alpha'
 import type { AlphaPulseToken } from '../lib/api/alphaPulse'
+import { chainExplorerTokenUrl, shortenAddress } from '../lib/tokenExplorer'
+import { ContractHoldersAnalysisButton } from './ContractHoldersAnalysisButton'
 
 function fmtPct(v: string | number | undefined): string {
   if (v === undefined || v === '') return '—'
@@ -44,6 +46,10 @@ export function AlphaInfoPanel({
   const vol24 = pulse?.volume24h ?? cex?.volume24h
   const cnt24 = pulse?.count24h ?? cex?.count24h
   const pct24 = pulse?.percentChange24h ?? cex?.percentChange24h
+  const chainName = cex?.chainName ?? pulse?.chainId
+  const chainId = pulse?.chainId ?? cex?.chainId
+  const contractAddress = pulse?.contractAddress ?? cex?.contractAddress
+  const explorerUrl = chainExplorerTokenUrl(chainId, contractAddress)
 
   if (loading) {
     return (
@@ -105,10 +111,36 @@ export function AlphaInfoPanel({
           <dt>24h 成交笔数</dt>
           <dd>{fmtInt(cnt24)}</dd>
         </div>
-        {cex?.chainName ? (
+        {chainName ? (
           <div>
             <dt>链</dt>
-            <dd>{cex.chainName}</dd>
+            <dd>{chainName}</dd>
+          </div>
+        ) : null}
+        {contractAddress ? (
+          <div>
+            <dt>合约地址</dt>
+            <dd>
+              {explorerUrl ? (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={contractAddress}
+                >
+                  {shortenAddress(contractAddress)}
+                </a>
+              ) : (
+                <span title={contractAddress}>
+                  {shortenAddress(contractAddress)}
+                </span>
+              )}
+              <ContractHoldersAnalysisButton
+                chain={chainId}
+                contractAddress={contractAddress}
+                label={chainName}
+              />
+            </dd>
           </div>
         ) : null}
         {cex?.alphaId ? (

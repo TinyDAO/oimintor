@@ -7,6 +7,7 @@ import {
 } from '../src/lib/loadSignals.ts'
 import { mapInsightsSlimForList } from '../src/lib/symbolInsightSlim.ts'
 import { scanVariantSignalsForInsights } from '../src/lib/scanVariantHits.ts'
+import { fetchTokenHoldersAnalysis } from '../src/lib/explorerHolders.ts'
 
 function parsePathname(rawUrl: string): string | null {
   try {
@@ -83,6 +84,32 @@ async function handleVariantScan(
   res.end(JSON.stringify({ topN, hits }))
 }
 
+async function handleTokenHolders(
+  rawUrl: string,
+  res: ServerResponse,
+): Promise<void> {
+  const u = new URL(rawUrl, 'http://localhost')
+  const chain = u.searchParams.get('chain')
+  const address = u.searchParams.get('address')
+  const page = Math.max(
+    1,
+    parseInt(u.searchParams.get('page') ?? '1', 10) || 1,
+  )
+
+  if (!chain || !address) {
+    res.statusCode = 400
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.end(JSON.stringify({ error: 'Missing chain or address' }))
+    return
+  }
+
+  const data = await fetchTokenHoldersAnalysis(chain, address, page)
+  res.statusCode = 200
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.setHeader('Cache-Control', 'private, max-age=60')
+  res.end(JSON.stringify(data))
+}
+
 /**
  * 开发 / vite preview：同源聚合 Binance 相关接口，减少浏览器请求数。
  */
@@ -123,7 +150,26 @@ function aggregateBinanceDevMiddleware(): Connect.NextHandleFunction {
       return
     }
 
-    if (pathname === '/api/market-insights' || pathname === '/api/variant-scan') {
+    if (pathname === '/api/token-holders' && req.method === 'GET') {
+      try {
+        await handleTokenHolders(rawUrl, res)
+      } catch (e) {
+        res.statusCode = 502
+        res.setHeader('Content-Type', 'application/json; charset=utf-8')
+        res.end(
+          JSON.stringify({
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        )
+      }
+      return
+    }
+
+    if (
+      pathname === '/api/market-insights' ||
+      pathname === '/api/variant-scan' ||
+      pathname === '/api/token-holders'
+    ) {
       res.statusCode = 405
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       res.end('Method Not Allowed')

@@ -58,6 +58,17 @@ import {
   type SmOverviewValueScanUiState,
 } from '../lib/smOverviewValueScan'
 import { SmOverviewValueScanTable } from './SmOverviewValueScanTable'
+import {
+  RETAIL_WHALE_DIVERGENCE_SCAN_TITLE,
+  type RetailWhaleDivergenceScanUiState,
+} from '../lib/retailWhaleDivergenceScan'
+import { RetailWhaleDivergenceScanTable } from './RetailWhaleDivergenceScanTable'
+import {
+  DAILY_VOLUME_MULTIPLE_THRESHOLD,
+  DAILY_VOLUME_SCAN_TITLE,
+  type DailyVolumeScanUiState,
+} from '../lib/dailyVolumeScan'
+import { DailyVolumeScanTable } from './DailyVolumeScanTable'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 import {
@@ -176,6 +187,8 @@ export function DetailDrawer({
   smDirectionScan,
   smNotionalRatioScan,
   smOverviewValueScan,
+  retailWhaleDivergenceScan,
+  dailyVolumeScan,
   pendingSymbol,
   openDetailError,
   onCloseAllDrawers,
@@ -188,12 +201,18 @@ export function DetailDrawer({
   onRefreshSmNotionalRatioScan,
   onPickFromSmOverviewValueScan,
   onRefreshSmOverviewValueScan,
+  onPickFromRetailWhaleDivergenceScan,
+  onRefreshRetailWhaleDivergenceScan,
+  onPickFromDailyVolumeScan,
+  onRefreshDailyVolumeScan,
 }: {
   row: SymbolInsight | null
   variantScan: VariantScanUiState | null
   smDirectionScan: SmDirectionScanUiState | null
   smNotionalRatioScan: SmNotionalRatioScanUiState | null
   smOverviewValueScan: SmOverviewValueScanUiState | null
+  retailWhaleDivergenceScan: RetailWhaleDivergenceScanUiState | null
+  dailyVolumeScan: DailyVolumeScanUiState | null
   /** 单合约详情拉取中（如从聪明钱列表打开） */
   pendingSymbol?: string | null
   openDetailError?: string | null
@@ -211,6 +230,10 @@ export function DetailDrawer({
   onRefreshSmNotionalRatioScan: () => void
   onPickFromSmOverviewValueScan: (symbol: string) => void
   onRefreshSmOverviewValueScan: () => void
+  onPickFromRetailWhaleDivergenceScan: (symbol: string) => void
+  onRefreshRetailWhaleDivergenceScan: () => void
+  onPickFromDailyVolumeScan: (symbol: string) => void
+  onRefreshDailyVolumeScan: () => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -397,7 +420,12 @@ export function DetailDrawer({
   }, [displayRow])
 
   const hasScan = Boolean(
-    variantScan || smDirectionScan || smNotionalRatioScan || smOverviewValueScan,
+    variantScan ||
+      smDirectionScan ||
+      smNotionalRatioScan ||
+      smOverviewValueScan ||
+      retailWhaleDivergenceScan ||
+      dailyVolumeScan,
   )
   const hasTopOverlay = Boolean(
     row || pendingSymbol || openDetailError,
@@ -860,6 +888,193 @@ export function DetailDrawer({
       </div>
     ) : null
 
+  const retailWhaleDivergenceScanPanel =
+    retailWhaleDivergenceScan ? (
+      <div
+        className="drawer-backdrop drawer-stack-base"
+        onClick={onCloseAllDrawers}
+      >
+        <aside
+          className="drawer drawer-variant-scan"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label={`${RETAIL_WHALE_DIVERGENCE_SCAN_TITLE} 扫描`}
+          aria-busy={retailWhaleDivergenceScan.phase === 'loading'}
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>{RETAIL_WHALE_DIVERGENCE_SCAN_TITLE}</h2>
+              <p className="muted small">
+                扫描全部正在交易的 USDT-M 永续合约多空比三轨，筛出「大户持仓多空比」与「用户多空比」分处 1
+                两侧的相反行为；默认按双方远离 1 的反差强度从大到小排序。
+              </p>
+              {retailWhaleDivergenceScan.phase === 'done' ? (
+                <p className="muted small drawer-variant-cache-line">
+                  完成时间 ·{' '}
+                  {formatVariantScanSnapshot(
+                    retailWhaleDivergenceScan.doneAtMs,
+                  )}
+                </p>
+              ) : null}
+            </div>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={retailWhaleDivergenceScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshRetailWhaleDivergenceScan()
+                }}
+                title="重新扫描全部 USDT-M 永续合约多空比三轨"
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
+          </header>
+          {retailWhaleDivergenceScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {retailWhaleDivergenceScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {retailWhaleDivergenceScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {retailWhaleDivergenceScan.error}
+              </p>
+            </section>
+          ) : null}
+          {retailWhaleDivergenceScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {retailWhaleDivergenceScan.rows.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  全部 USDT-M 永续合约中暂无「大户持仓」与「用户」分处多空两侧的合约。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small" style={{ marginTop: 0 }}>
+                    共 {retailWhaleDivergenceScan.rows.length} /{' '}
+                    {retailWhaleDivergenceScan.totalCount}{' '}
+                    个合约出现大户与散户相反行为
+                    {retailWhaleDivergenceScan.failedCount > 0
+                      ? `，${retailWhaleDivergenceScan.failedCount} 个合约拉取失败已跳过`
+                      : ''}
+                    ；点击行叠开合约详情（列表保留）。
+                  </p>
+                  <RetailWhaleDivergenceScanTable
+                    rows={retailWhaleDivergenceScan.rows}
+                    onOpenDetail={onPickFromRetailWhaleDivergenceScan}
+                  />
+                </>
+              )}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    ) : null
+
+  const dailyVolumeScanPanel =
+    dailyVolumeScan ? (
+      <div
+        className="drawer-backdrop drawer-stack-base"
+        onClick={onCloseAllDrawers}
+      >
+        <aside
+          className="drawer drawer-variant-scan"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label={`${DAILY_VOLUME_SCAN_TITLE} 扫描`}
+          aria-busy={dailyVolumeScan.phase === 'loading'}
+        >
+          <header className="drawer-head">
+            <div>
+              <h2>{DAILY_VOLUME_SCAN_TITLE}</h2>
+              <p className="muted small">
+                扫描全部正在交易的 USDT-M 永续合约完整日 K；最近 3
+                日平均成交币量达到此前 7 日平均的{' '}
+                {DAILY_VOLUME_MULTIPLE_THRESHOLD} 倍以上才上榜，默认按放量倍数降序。
+              </p>
+              {dailyVolumeScan.phase === 'done' ? (
+                <p className="muted small drawer-variant-cache-line">
+                  完成时间 · {formatVariantScanSnapshot(dailyVolumeScan.doneAtMs)} ·{' '}
+                  {dailyVolumeScan.fromCache ? '今日缓存' : '刚刚扫描'}
+                </p>
+              ) : null}
+            </div>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={dailyVolumeScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshDailyVolumeScan()
+                }}
+                title="按当前榜单深度重新扫描完整日 K"
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
+          </header>
+          {dailyVolumeScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {dailyVolumeScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {dailyVolumeScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {dailyVolumeScan.error}
+              </p>
+            </section>
+          ) : null}
+          {dailyVolumeScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {dailyVolumeScan.rows.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  全部 USDT-M 永续合约中暂无达到{' '}
+                  {DAILY_VOLUME_MULTIPLE_THRESHOLD} 倍的日线放量合约。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small daily-volume-legend" style={{ marginTop: 0 }}>
+                    共 {dailyVolumeScan.rows.length} / {dailyVolumeScan.totalCount}{' '}
+                    个合约上榜
+                    {dailyVolumeScan.failedCount > 0
+                      ? `，${dailyVolumeScan.failedCount} 个合约拉取失败已跳过`
+                      : ''}
+                    。走势中灰色为更早数据，蓝色为此前 7 日，绿色为最近 3 日。
+                  </p>
+                  <DailyVolumeScanTable
+                    rows={dailyVolumeScan.rows}
+                    onOpenDetail={onPickFromDailyVolumeScan}
+                  />
+                </>
+              )}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    ) : null
+
   const errorOverlay =
     openDetailError && !row ? (
       <div
@@ -1224,6 +1439,8 @@ export function DetailDrawer({
       {smDirectionScanPanel}
       {smNotionalRatioScanPanel}
       {smOverviewValueScanPanel}
+      {retailWhaleDivergenceScanPanel}
+      {dailyVolumeScanPanel}
       {createPortal(
         <>
           {errorOverlay}

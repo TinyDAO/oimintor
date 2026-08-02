@@ -53,6 +53,18 @@ import {
   SM_OVERVIEW_VALUE_SCAN_TITLE,
   type SmOverviewValueScanUiState,
 } from './lib/smOverviewValueScan'
+import {
+  RETAIL_WHALE_DIVERGENCE_SCAN_TITLE,
+  scanRetailWhaleDivergences,
+  type RetailWhaleDivergenceScanUiState,
+} from './lib/retailWhaleDivergenceScan'
+import {
+  DAILY_VOLUME_SCAN_TITLE,
+  readTodayDailyVolumeScan,
+  saveDailyVolumeScan,
+  scanDailyVolumeSurges,
+  type DailyVolumeScanUiState,
+} from './lib/dailyVolumeScan'
 
 function labelSmRange(r: SmartMoneyTimeRange): string {
   switch (r) {
@@ -153,10 +165,16 @@ export default function App() {
     useState<SmNotionalRatioScanUiState | null>(null)
   const [smOverviewValueScan, setSmOverviewValueScan] =
     useState<SmOverviewValueScanUiState | null>(null)
+  const [retailWhaleScan, setRetailWhaleScan] =
+    useState<RetailWhaleDivergenceScanUiState | null>(null)
+  const [dailyVolumeScan, setDailyVolumeScan] =
+    useState<DailyVolumeScanUiState | null>(null)
   const scanAbortRef = useRef<AbortController | null>(null)
   const smScanAbortRef = useRef<AbortController | null>(null)
   const smNotionalScanAbortRef = useRef<AbortController | null>(null)
   const smOverviewValueScanAbortRef = useRef<AbortController | null>(null)
+  const retailWhaleScanAbortRef = useRef<AbortController | null>(null)
+  const dailyVolumeScanAbortRef = useRef<AbortController | null>(null)
   const smDetailAbortRef = useRef<AbortController | null>(null)
 
   /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿阈值变为上穿阈值，见 oiCrossAlert） */
@@ -221,6 +239,10 @@ export default function App() {
     smNotionalScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
     const ac = new AbortController()
     scanAbortRef.current = ac
     const depth = topN
@@ -228,6 +250,8 @@ export default function App() {
     setSmDirectionScan(null)
     setSmNotionalScan(null)
     setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
     setVariantScan({
       phase: 'loading',
       progress: `V4A/V7/V8 聚合扫描（Top ${depth}）…`,
@@ -308,12 +332,18 @@ export default function App() {
     smNotionalScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
     const ac = new AbortController()
     smScanAbortRef.current = ac
     setSelected(null)
     setVariantScan(null)
     setSmNotionalScan(null)
     setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
     setSmDirectionScan({ phase: 'loading', progress: '拉取 24h 与 1h 聪明钱列表…' })
     try {
       const [rows24h, rows1h] = await Promise.all([
@@ -347,6 +377,10 @@ export default function App() {
     smScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     const ac = new AbortController()
     smNotionalScanAbortRef.current = ac
@@ -354,6 +388,8 @@ export default function App() {
     setVariantScan(null)
     setSmDirectionScan(null)
     setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
     const tr = smRange
     setSmNotionalScan({
       phase: 'loading',
@@ -427,6 +463,10 @@ export default function App() {
     smScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     smNotionalScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     const ac = new AbortController()
     smOverviewValueScanAbortRef.current = ac
@@ -434,6 +474,8 @@ export default function App() {
     setVariantScan(null)
     setSmDirectionScan(null)
     setSmNotionalScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
     setSmOverviewValueScan({
       phase: 'loading',
       progress: '加载 Binance USDT-M 永续合约列表…',
@@ -483,6 +525,142 @@ export default function App() {
     }
   }, [])
 
+  const runRetailWhaleDivergenceScan = useCallback(async () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    const ac = new AbortController()
+    retailWhaleScanAbortRef.current = ac
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
+    setDailyVolumeScan(null)
+    setRetailWhaleScan({
+      phase: 'loading',
+      progress: '准备扫描全部 USDT-M 永续合约多空比…',
+    })
+    try {
+      const result = await scanRetailWhaleDivergences(
+        (progress) => {
+          setRetailWhaleScan((state) =>
+            state?.phase === 'loading' ? { ...state, progress } : state,
+          )
+        },
+        ac.signal,
+      )
+      if (ac.signal.aborted) return
+      setRetailWhaleScan({
+        phase: 'done',
+        ...result,
+        doneAtMs: Date.now(),
+      })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+      setRetailWhaleScan({
+        phase: 'error',
+        error: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      if (retailWhaleScanAbortRef.current === ac)
+        retailWhaleScanAbortRef.current = null
+    }
+  }, [])
+
+  const runDailyVolumeScan = useCallback(async () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    const ac = new AbortController()
+    dailyVolumeScanAbortRef.current = ac
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan({
+      phase: 'loading',
+      progress: '准备扫描全部 USDT-M 永续合约日线成交量…',
+    })
+    try {
+      const result = await scanDailyVolumeSurges(
+        (progress) => {
+          setDailyVolumeScan((state) =>
+            state?.phase === 'loading' ? { ...state, progress } : state,
+          )
+        },
+        ac.signal,
+      )
+      if (ac.signal.aborted) return
+      const snapshot = saveDailyVolumeScan(result)
+      setDailyVolumeScan({
+        phase: 'done',
+        ...snapshot,
+        fromCache: false,
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      setDailyVolumeScan({
+        phase: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      if (dailyVolumeScanAbortRef.current === ac) {
+        dailyVolumeScanAbortRef.current = null
+      }
+    }
+  }, [])
+
+  const openDailyVolumeScanDrawer = useCallback(() => {
+    const cached = readTodayDailyVolumeScan()
+    if (!cached) {
+      void runDailyVolumeScan()
+      return
+    }
+
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan({
+      phase: 'done',
+      ...cached,
+      fromCache: true,
+    })
+  }, [runDailyVolumeScan])
+
   const openSmDirectionScanDrawer = useCallback(() => {
     void runSmDirectionScan()
   }, [runSmDirectionScan])
@@ -500,6 +678,10 @@ export default function App() {
     smNotionalScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
 
     const cached = readTodaySmOverviewValueScanCache()
     if (cached) {
@@ -507,6 +689,8 @@ export default function App() {
       setVariantScan(null)
       setSmDirectionScan(null)
       setSmNotionalScan(null)
+      setRetailWhaleScan(null)
+      setDailyVolumeScan(null)
       setSmOverviewValueScan({
         phase: 'done',
         result: cached,
@@ -524,6 +708,10 @@ export default function App() {
     smNotionalScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
     const depth = topN
     const cached = readVariantScanCacheIfValid(depth)
     if (cached) {
@@ -531,6 +719,8 @@ export default function App() {
       setSmDirectionScan(null)
       setSmNotionalScan(null)
       setSmOverviewValueScan(null)
+      setRetailWhaleScan(null)
+      setDailyVolumeScan(null)
       setVariantScan({
         phase: 'done',
         progress: '',
@@ -557,6 +747,10 @@ export default function App() {
     smNotionalScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
     smDetailAbortRef.current?.abort()
     smDetailAbortRef.current = null
     setSelected(null)
@@ -566,6 +760,8 @@ export default function App() {
     setSmDirectionScan(null)
     setSmNotionalScan(null)
     setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
   }
 
   /** 仅关闭合约详情 / 加载中 / 错误层；保留 V4/V7/V8 扫描抽屉 */
@@ -595,6 +791,8 @@ export default function App() {
       setSmDirectionScan(null)
       setSmNotionalScan(null)
       setSmOverviewValueScan(null)
+      setRetailWhaleScan(null)
+      setDailyVolumeScan(null)
     }
     setDetailPendingSymbol(symbol)
     void loadSymbolInsight(symbol, ac.signal)
@@ -768,123 +966,168 @@ export default function App() {
         </nav>
 
         <div className="toolbar">
-          <button type="button" className="btn" onClick={onRefreshClick} disabled={loading}>
-            {loading ? '加载中…' : '刷新'}
-          </button>
-          <label className="chk">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => {
-                const on = e.target.checked
-                setAutoRefresh(on)
-                try {
-                  localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, on ? '1' : '0')
-                } catch {
-                  /* ignore */
-                }
-                if (on) {
-                  setNextDeadline(Date.now() + AUTO_REFRESH_MS)
-                } else {
-                  setNextDeadline(null)
-                }
-              }}
-            />
-            每 5 分钟自动刷新
-          </label>
-          {countdownLabel ? (
-            <span className="auto-refresh-countdown muted small">{countdownLabel}</span>
-          ) : null}
+          <div className="toolbar-group toolbar-group-status">
+            <button type="button" className="btn" onClick={onRefreshClick} disabled={loading}>
+              {loading ? '加载中…' : '刷新'}
+            </button>
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => {
+                  const on = e.target.checked
+                  setAutoRefresh(on)
+                  try {
+                    localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, on ? '1' : '0')
+                  } catch {
+                    /* ignore */
+                  }
+                  if (on) {
+                    setNextDeadline(Date.now() + AUTO_REFRESH_MS)
+                  } else {
+                    setNextDeadline(null)
+                  }
+                }}
+              />
+              自动刷新
+            </label>
+            {countdownLabel ? (
+              <span className="auto-refresh-countdown muted small">{countdownLabel}</span>
+            ) : null}
+          </div>
 
           {panel === 'oi' ? (
             <>
-              <label className="toolbar-field">
-                <span className="toolbar-label">榜单深度</span>
-                <select
-                  className="toolbar-select"
-                  value={topN}
-                  disabled={oiLoading}
-                  onChange={(e) => {
-                    const n = normalizeTopN(Number(e.target.value))
-                    setTopN(n)
-                    try {
-                      localStorage.setItem(TOP_N_STORAGE_KEY, String(n))
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                  aria-label="按成交额取前 N 个合约"
-                >
-                  {TOP_N_CHOICES.map((n) => (
-                    <option key={n} value={n}>
-                      Top {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="chk">
-                <input
-                  type="checkbox"
-                  checked={alphaOnly}
-                  onChange={(e) => setAlphaOnly(e.target.checked)}
-                />
-                仅 Alpha 标的
-              </label>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={
-                  oiLoading ||
-                  variantScan?.phase === 'loading' ||
-                  smNotionalScan?.phase === 'loading' ||
-                  smOverviewValueScan?.phase === 'loading'
-                }
-                onClick={() => void openVariantScanDrawer()}
-                title={`按当前榜单深度 Top ${topN} 打开扫描；若有 24h 内缓存则直接展示，否则拉榜并校验 V4A/V7/V8`}
-              >
-                扫描 V4A/V7/V8
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={
-                  oiLoading ||
-                  smNotionalScan?.phase === 'loading' ||
-                  smOverviewValueScan?.phase === 'loading' ||
-                  variantScan?.phase === 'loading'
-                }
-                onClick={() => void runSmNotionalRatioScan()}
-                title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：聪明钱多/空估算名义比；统计周期与「聪明钱」页一致（当前 ${labelSmRange(smRange)}）`}
-              >
-                {SM_NOTIONAL_RATIO_SCAN_TITLE}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={
-                  oiLoading ||
-                  smNotionalScan?.phase === 'loading' ||
-                  smOverviewValueScan?.phase === 'loading' ||
-                  variantScan?.phase === 'loading'
-                }
-                onClick={() => void openSmOverviewValueScanDrawer()}
-                title={`${SM_OVERVIEW_VALUE_SCAN_TITLE}：优先打开今天缓存；无缓存时扫描全部 USDT-M 永续 overview，筛出多单/空单大户价值超过 $5M 的合约，并与昨天缓存对比标记 NEW`}
-              >
-                {SM_OVERVIEW_VALUE_SCAN_TITLE}
-              </button>
-              {typeof Notification !== 'undefined' &&
-              Notification.permission === 'default' ? (
+              <div className="toolbar-group toolbar-group-filters">
+                <label className="toolbar-field">
+                  <span className="toolbar-label">榜单深度</span>
+                  <select
+                    className="toolbar-select"
+                    value={topN}
+                    disabled={oiLoading}
+                    onChange={(e) => {
+                      const n = normalizeTopN(Number(e.target.value))
+                      setTopN(n)
+                      try {
+                        localStorage.setItem(TOP_N_STORAGE_KEY, String(n))
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                    aria-label="按成交额取前 N 个合约"
+                  >
+                    {TOP_N_CHOICES.map((n) => (
+                      <option key={n} value={n}>
+                        Top {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="chk">
+                  <input
+                    type="checkbox"
+                    checked={alphaOnly}
+                    onChange={(e) => setAlphaOnly(e.target.checked)}
+                  />
+                  仅 Alpha
+                </label>
+              </div>
+              <div className="toolbar-group toolbar-group-scans" aria-label="扫描工具">
+                <span className="toolbar-group-label">扫描</span>
                 <button
                   type="button"
-                  className="btn btn-ghost small"
-                  onClick={() => void requestDesktopNotifyPermission()}
+                  className="btn btn-ghost"
+                  disabled={
+                    oiLoading ||
+                    variantScan?.phase === 'loading' ||
+                    smNotionalScan?.phase === 'loading' ||
+                    smOverviewValueScan?.phase === 'loading' ||
+                    retailWhaleScan?.phase === 'loading' ||
+                    dailyVolumeScan?.phase === 'loading'
+                  }
+                  onClick={() => void openVariantScanDrawer()}
+                  title={`按当前榜单深度 Top ${topN} 打开扫描；若有 24h 内缓存则直接展示，否则拉榜并校验 V4A/V7/V8`}
                 >
-                  启用桌面通知（OI 突破 {OI_CROSS_THRESHOLD_PCT}%）
+                  V4A/V7/V8
                 </button>
-              ) : null}
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={
+                    oiLoading ||
+                    smNotionalScan?.phase === 'loading' ||
+                    smOverviewValueScan?.phase === 'loading' ||
+                    retailWhaleScan?.phase === 'loading' ||
+                    dailyVolumeScan?.phase === 'loading' ||
+                    variantScan?.phase === 'loading'
+                  }
+                  onClick={() => void runSmNotionalRatioScan()}
+                  title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：聪明钱多/空估算名义比；统计周期与「聪明钱」页一致（当前 ${labelSmRange(smRange)}）`}
+                >
+                  {SM_NOTIONAL_RATIO_SCAN_TITLE}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={
+                    oiLoading ||
+                    smNotionalScan?.phase === 'loading' ||
+                    smOverviewValueScan?.phase === 'loading' ||
+                    retailWhaleScan?.phase === 'loading' ||
+                    dailyVolumeScan?.phase === 'loading' ||
+                    variantScan?.phase === 'loading'
+                  }
+                  onClick={() => void runRetailWhaleDivergenceScan()}
+                  title={`${RETAIL_WHALE_DIVERGENCE_SCAN_TITLE}：扫描全部 USDT-M 永续，筛选大户持仓 LSR 与用户 LSR 分处 1 两侧的合约，反差越大越靠前`}
+                >
+                  {RETAIL_WHALE_DIVERGENCE_SCAN_TITLE}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={
+                    oiLoading ||
+                    smNotionalScan?.phase === 'loading' ||
+                    smOverviewValueScan?.phase === 'loading' ||
+                    retailWhaleScan?.phase === 'loading' ||
+                    dailyVolumeScan?.phase === 'loading' ||
+                    variantScan?.phase === 'loading'
+                  }
+                  onClick={openDailyVolumeScanDrawer}
+                  title="扫描全部 USDT-M 永续：最近 3 个完整日的平均成交币量，相对此前 7 个完整日放大至少 5 倍；按倍数降序"
+                >
+                  {DAILY_VOLUME_SCAN_TITLE}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={
+                    oiLoading ||
+                    smNotionalScan?.phase === 'loading' ||
+                    smOverviewValueScan?.phase === 'loading' ||
+                    retailWhaleScan?.phase === 'loading' ||
+                    dailyVolumeScan?.phase === 'loading' ||
+                    variantScan?.phase === 'loading'
+                  }
+                  onClick={() => void openSmOverviewValueScanDrawer()}
+                  title={`${SM_OVERVIEW_VALUE_SCAN_TITLE}：优先打开今天缓存；无缓存时扫描全部 USDT-M 永续 overview，筛出多单/空单大户价值超过 $5M 的合约，并与昨天缓存对比标记 NEW`}
+                >
+                  {SM_OVERVIEW_VALUE_SCAN_TITLE}
+                </button>
+                {typeof Notification !== 'undefined' &&
+                Notification.permission === 'default' ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost small"
+                    onClick={() => void requestDesktopNotifyPermission()}
+                  >
+                    OI 通知
+                  </button>
+                ) : null}
+              </div>
             </>
           ) : (
-            <>
+            <div className="toolbar-group toolbar-group-filters">
               <label className="toolbar-field">
                 <span className="toolbar-label">统计周期</span>
                 <select
@@ -921,14 +1164,15 @@ export default function App() {
                 disabled={
                   smLoading ||
                   smDirectionScan?.phase === 'loading' ||
-                  smNotionalScan?.phase === 'loading'
+                  smNotionalScan?.phase === 'loading' ||
+                  dailyVolumeScan?.phase === 'loading'
                 }
                 onClick={() => void openSmDirectionScanDrawer()}
                 title="拉取 24h 与 1h 聪明钱列表，筛出净方向相反合约，按两档净名义差排序"
               >
                 净方向扫描
               </button>
-            </>
+            </div>
           )}
 
           <input
@@ -1023,7 +1267,9 @@ export default function App() {
               onSelect={
                 variantScan?.phase === 'loading' ||
                 smNotionalScan?.phase === 'loading' ||
-                smOverviewValueScan?.phase === 'loading'
+                smOverviewValueScan?.phase === 'loading' ||
+                retailWhaleScan?.phase === 'loading' ||
+                dailyVolumeScan?.phase === 'loading'
                   ? () => {}
                   : setSelected
               }
@@ -1057,6 +1303,8 @@ export default function App() {
         smDirectionScan={smDirectionScan}
         smNotionalRatioScan={smNotionalScan}
         smOverviewValueScan={smOverviewValueScan}
+        retailWhaleDivergenceScan={retailWhaleScan}
+        dailyVolumeScan={dailyVolumeScan}
         pendingSymbol={detailPendingSymbol}
         openDetailError={detailOpenError}
         onCloseAllDrawers={closeDetailDrawer}
@@ -1069,6 +1317,16 @@ export default function App() {
         onRefreshSmNotionalRatioScan={() => void runSmNotionalRatioScan()}
         onPickFromSmOverviewValueScan={(sym) => openSmSymbolDetail(sym, false)}
         onRefreshSmOverviewValueScan={() => void runSmOverviewValueScan()}
+        onPickFromRetailWhaleDivergenceScan={(symbol) =>
+          openSmSymbolDetail(symbol, false)
+        }
+        onRefreshRetailWhaleDivergenceScan={() =>
+          void runRetailWhaleDivergenceScan()
+        }
+        onPickFromDailyVolumeScan={(symbol) =>
+          openSmSymbolDetail(symbol, false)
+        }
+        onRefreshDailyVolumeScan={() => void runDailyVolumeScan()}
       />
     </div>
   )

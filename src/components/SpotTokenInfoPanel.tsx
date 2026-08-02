@@ -1,5 +1,7 @@
 import type { BinanceSpotDrawerInfo } from '../lib/api/binanceSpot'
 import { formatCoinPrice } from '../lib/formatPrice'
+import { shortenAddress } from '../lib/tokenExplorer'
+import { ContractHoldersAnalysisButton } from './ContractHoldersAnalysisButton'
 
 function n(s: string): number {
   return parseFloat(s)
@@ -66,6 +68,7 @@ export function SpotTokenInfoPanel({
 
   const base = info.baseAsset
   const pct = n(info.priceChangePercent)
+  const contractNetworks = info.contractNetworks
 
   return (
     <div className="spot-token-info">
@@ -76,9 +79,40 @@ export function SpotTokenInfoPanel({
         </a>
       </p>
       <p className="muted small" style={{ marginBottom: '0.45rem' }}>
-        数据来自 Binance 现货公开 REST（/api/v3），不含市值排行、流通量等字段。
+        行情来自 Binance 现货公开 REST（/api/v3），链上合约来自 Binance 公开资产网络列表。
       </p>
       <dl className="alpha-dl spot-token-dl">
+        {contractNetworks.length > 0 ? (
+          <div>
+            <dt>链上合约</dt>
+            <dd>
+              {contractNetworks.map((n) => (
+                <span key={`${n.network}:${n.contractAddress}`}>
+                  {n.explorerUrl ? (
+                    <a
+                      href={n.explorerUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title={n.contractAddress}
+                    >
+                      {n.networkDisplay} {shortenAddress(n.contractAddress)}
+                    </a>
+                  ) : (
+                    <span title={n.contractAddress}>
+                      {n.networkDisplay} {shortenAddress(n.contractAddress)}
+                    </span>
+                  )}
+                  <ContractHoldersAnalysisButton
+                    chain={n.network}
+                    contractAddress={n.contractAddress}
+                    label={n.networkDisplay}
+                  />
+                  {' '}
+                </span>
+              ))}
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt>最新价</dt>
           <dd className="mono">{fmtPriceStr(info.lastPrice)} USDT</dd>

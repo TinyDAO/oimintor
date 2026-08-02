@@ -1,4 +1,5 @@
-import { spot } from './paths'
+import { bapi, spot } from './paths'
+import { chainExplorerTokenUrl } from '../tokenExplorer'
 
 const UA = 'oi-monitor/1.0 (binance-spot-public)'
 
@@ -27,6 +28,32 @@ type ExchangeSymbolRow = {
 
 type ExchangeInfoResp = {
   symbols?: ExchangeSymbolRow[]
+}
+
+type NetworkCoinRow = {
+  coin: string
+  networkList?: NetworkCoinNetwork[]
+}
+
+type NetworkCoinNetwork = {
+  network: string
+  networkDisplay?: string
+  name?: string
+  contractAddress?: string
+  depositEnable?: boolean
+  withdrawEnable?: boolean
+}
+
+type NetworkCoinResp = {
+  code: string
+  data?: NetworkCoinRow[]
+}
+
+export type SpotTokenContractNetwork = {
+  network: string
+  networkDisplay: string
+  contractAddress: string
+  explorerUrl: string | null
 }
 
 /** Binance GET /api/v3/ticker/24hr 常用字段 */
@@ -67,12 +94,50 @@ export type BinanceSpotDrawerInfo = {
   quoteVolume: string
   /** 24h 成交笔数 */
   count: number
+  contractNetworks: SpotTokenContractNetwork[]
 }
 
 function spotPairFromFuturesSymbol(futuresSymbol: string): string {
   const u = futuresSymbol.trim().toUpperCase()
   if (u.endsWith('USDT')) return u
   return `${u}USDT`
+}
+
+let networkCoinCache: { at: number; data: NetworkCoinRow[] } | null = null
+const NETWORK_COIN_TTL_MS = 10 * 60 * 1000
+
+async function fetchNetworkCoinsCached(
+  signal?: AbortSignal,
+): Promise<NetworkCoinRow[]> {
+  const now = Date.now()
+  if (networkCoinCache && now - networkCoinCache.at < NETWORK_COIN_TTL_MS) {
+    return networkCoinCache.data
+  }
+
+  const url = bapi('/bapi/capital/v2/public/capital/getNetworkCoinAll')
+  const j = await getJson<NetworkCoinResp>(url, signal)
+  const data = j.code === '000000' && Array.isArray(j.data) ? j.data : []
+  networkCoinCache = { at: now, data }
+  return data
+}
+
+async function fetchSpotTokenContractNetworks(
+  baseAsset: string,
+  signal?: AbortSignal,
+): Promise<SpotTokenContractNetwork[]> {
+  const rows = await fetchNetworkCoinsCached(signal)
+  const want = baseAsset.trim().toUpperCase()
+  const hit = rows.find((r) => r.coin?.toUpperCase() === want)
+  if (!hit?.networkList?.length) return []
+
+  return hit.networkList
+    .filter((n) => n.contractAddress)
+    .map((n) => ({
+      network: n.network,
+      networkDisplay: n.networkDisplay || n.network || n.name || '—',
+      contractAddress: n.contractAddress!,
+      explorerUrl: chainExplorerTokenUrl(n.network, n.contractAddress),
+    }))
 }
 
 /**
@@ -116,6 +181,11 @@ export async function fetchBinanceSpotMarketInfo(
   if (!si || si.symbol !== spotSymbol) return null
 
   const base = si.baseAsset
+  const contractNetworks = await fetchSpotTokenContractNetworks(
+    base,
+    signal,
+  ).catch(() => [])
+
   return {
     spotSymbol: si.symbol,
     baseAsset: base,
@@ -132,5 +202,6 @@ export async function fetchBinanceSpotMarketInfo(
     volumeBase: tick.volume,
     quoteVolume: tick.quoteVolume,
     count: tick.count,
+    contractNetworks,
   }
 }

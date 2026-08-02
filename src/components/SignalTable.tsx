@@ -4,12 +4,24 @@ import type { SymbolInsight } from '../lib/signals/compute'
 import { BinanceFuturesLink } from './BinanceLink'
 import { RatioSpark } from './RatioSpark'
 
-function Flag({ on, label }: { on: boolean; label: string }) {
+function Flag({ label }: { label: string }) {
   return (
-    <span className={`sig-flag ${on ? 'on' : ''}`} title={label}>
+    <span className="sig-flag on" title={label}>
       {label}
     </span>
   )
+}
+
+function valueTone(value: number): string {
+  if (value > 0) return 'value-up'
+  if (value < 0) return 'value-down'
+  return 'value-flat'
+}
+
+function lsrTone(value: number): string {
+  if (value > 1.02) return 'value-up'
+  if (value < 0.98) return 'value-down'
+  return 'value-flat'
 }
 
 export type SortKey =
@@ -115,15 +127,7 @@ export function SignalTable({
     }
   }
 
-  function SortBtn({
-    k,
-    children,
-    className = '',
-  }: {
-    k: SortKey
-    children: ReactNode
-    className?: string
-  }) {
+  function renderSortHeader(k: SortKey, children: ReactNode, className = '') {
     const active = sortKey === k
     const arrow = active ? (sortDir === 'desc' ? '↓' : '↑') : ''
     return (
@@ -154,31 +158,31 @@ export function SignalTable({
         <thead>
           <tr>
             <th>
-              <SortBtn k="symbol">合约</SortBtn>
+              {renderSortHeader('symbol', '合约')}
             </th>
             <th>
-              <SortBtn k="pricePct">24h涨跌</SortBtn>
+              {renderSortHeader('pricePct', '24h涨跌')}
             </th>
             <th>
-              <SortBtn k="pricePct7d">7d涨跌</SortBtn>
+              {renderSortHeader('pricePct7d', '7d涨跌')}
             </th>
             <th>
-              <SortBtn k="oiPct">OI Δ24h</SortBtn>
+              {renderSortHeader('oiPct', 'OI Δ24h')}
             </th>
             <th>
-              <SortBtn k="oiPct7d">OI Δ7d</SortBtn>
+              {renderSortHeader('oiPct7d', 'OI Δ7d')}
             </th>
             <th>
-              <SortBtn k="globalLsr">用户LSR</SortBtn>
+              {renderSortHeader('globalLsr', '用户LSR')}
             </th>
             <th>
-              <SortBtn k="topPosLsr">大户持仓LSR</SortBtn>
+              {renderSortHeader('topPosLsr', '大户持仓LSR')}
             </th>
             <th>
-              <SortBtn k="spread">Spread</SortBtn>
+              {renderSortHeader('spread', 'Spread')}
             </th>
             <th>
-              <SortBtn k="structure">结构</SortBtn>
+              {renderSortHeader('structure', '结构')}
             </th>
             <th className="th-no-sort">多空曲线</th>
             <th className="th-no-sort"></th>
@@ -198,21 +202,32 @@ export function SignalTable({
                   {r.isAlpha ? <span className="alpha-badge">α</span> : null}
                 </span>
               </td>
-              <td className="mono num">
+              <td className={`mono num ${valueTone(parseFloat(r.ticker.priceChangePercent))}`}>
                 {parseFloat(r.ticker.priceChangePercent).toFixed(2)}%
               </td>
-              <td className="mono num">{r.priceChange7dPct.toFixed(2)}%</td>
-              <td className="mono num">{r.oiChangePct.toFixed(1)}%</td>
-              <td className="mono num">{r.oiChange7dPct.toFixed(1)}%</td>
-              <td className="mono num">{r.globalLsr.toFixed(2)}</td>
-              <td className="mono num">{r.topPosLsr.toFixed(2)}</td>
+              <td className={`mono num ${valueTone(r.priceChange7dPct)}`}>
+                {r.priceChange7dPct.toFixed(2)}%
+              </td>
+              <td className={`mono num ${valueTone(r.oiChangePct)}`}>
+                {r.oiChangePct.toFixed(1)}%
+              </td>
+              <td className={`mono num ${valueTone(r.oiChange7dPct)}`}>
+                {r.oiChange7dPct.toFixed(1)}%
+              </td>
+              <td className={`mono num ${lsrTone(r.globalLsr)}`}>
+                {r.globalLsr.toFixed(2)}
+              </td>
+              <td className={`mono num ${lsrTone(r.topPosLsr)}`}>
+                {r.topPosLsr.toFixed(2)}
+              </td>
               <td className="mono num">{r.spread.toFixed(3)}</td>
               <td>
                 <div className="flags">
-                  <Flag on={r.flags.oiSpike} label="OI急拉" />
-                  <Flag on={r.flags.accumulation} label="价稳OI" />
-                  <Flag on={r.flags.trendLeverage} label="趋势杠杆" />
-                  <Flag on={r.flags.userTopDivergence} label="用户/大户背离" />
+                  {r.flags.oiSpike ? <Flag label="OI急拉" /> : null}
+                  {r.flags.accumulation ? <Flag label="价稳OI" /> : null}
+                  {r.flags.trendLeverage ? <Flag label="趋势杠杆" /> : null}
+                  {r.flags.userTopDivergence ? <Flag label="用户/大户背离" /> : null}
+                  {!flagCount(r) ? <span className="muted">—</span> : null}
                 </div>
               </td>
               <td className="spark-cell">

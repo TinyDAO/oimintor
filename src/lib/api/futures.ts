@@ -22,8 +22,8 @@ export type ExchangeInfo = {
   symbols: ExchangeSymbol[]
 }
 
-export async function fetchExchangeInfo(): Promise<ExchangeInfo> {
-  return getJson<ExchangeInfo>(fapi('/fapi/v1/exchangeInfo'))
+export async function fetchExchangeInfo(signal?: AbortSignal): Promise<ExchangeInfo> {
+  return getJson<ExchangeInfo>(fapi('/fapi/v1/exchangeInfo'), signal)
 }
 
 export type Ticker24h = {
@@ -35,8 +35,8 @@ export type Ticker24h = {
   lowPrice: string
 }
 
-export async function fetchTicker24hAll(): Promise<Ticker24h[]> {
-  return getJson<Ticker24h[]>(fapi('/fapi/v1/ticker/24hr'))
+export async function fetchTicker24hAll(signal?: AbortSignal): Promise<Ticker24h[]> {
+  return getJson<Ticker24h[]>(fapi('/fapi/v1/ticker/24hr'), signal)
 }
 
 /** 指数价、标记价等（USDT-M 永续） */
@@ -181,10 +181,12 @@ export async function fetchGlobalLongShort(
   symbol: string,
   period: string,
   limit = 30,
+  signal?: AbortSignal,
 ): Promise<RatioRow[]> {
   const q = new URLSearchParams({ symbol, period, limit: String(limit) })
   return getJson<RatioRow[]>(
     `${fapi('/futures/data/globalLongShortAccountRatio')}?${q}`,
+    signal,
   )
 }
 
@@ -192,10 +194,12 @@ export async function fetchTopLongShortAccount(
   symbol: string,
   period: string,
   limit = 30,
+  signal?: AbortSignal,
 ): Promise<RatioRow[]> {
   const q = new URLSearchParams({ symbol, period, limit: String(limit) })
   return getJson<RatioRow[]>(
     `${fapi('/futures/data/topLongShortAccountRatio')}?${q}`,
+    signal,
   )
 }
 
@@ -203,9 +207,11 @@ export async function fetchTopLongShortPosition(
   symbol: string,
   period: string,
   limit = 30,
+  signal?: AbortSignal,
 ): Promise<RatioRow[]> {
   const q = new URLSearchParams({ symbol, period, limit: String(limit) })
   return getJson<RatioRow[]>(
     `${fapi('/futures/data/topLongShortPositionRatio')}?${q}`,
+    signal,
   )
 }

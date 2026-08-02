@@ -6,6 +6,9 @@
     },
     "api/variant-scan.ts": {
       "maxDuration": 120
+    },
+    "api/token-holders.ts": {
+      "maxDuration": 20
     }
   },
   "rewrites": [
