@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import {
-  overviewSideNotional,
-  overviewSideNotionalTraders,
+  overviewSideAvgEntry,
+  overviewSideMarkNotional,
+  overviewSideNotionalByBucket,
+  overviewSidePeople,
+  overviewSideProfitPeople,
+  overviewSideQty,
+  overviewSideUpl,
+  type OverviewBucket,
   type SmartMoneyOverviewData,
 } from '../lib/api/smartMoneyFutures'
 import { formatCoinPrice } from '../lib/formatPrice'
@@ -15,365 +21,479 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
-/** 带符号的 USDT 金额（盈亏），用于估算展示 */
 function fmtUsdSigned(n: number): string {
   if (!Number.isFinite(n)) return '—'
   const sign = n > 0 ? '+' : n < 0 ? '−' : ''
-  const a = Math.abs(n)
-  let body: string
-  if (a >= 1e9) body = `${(a / 1e9).toFixed(2)}B`
-  else if (a >= 1e6) body = `${(a / 1e6).toFixed(2)}M`
-  else if (a >= 1e3) body = `${(a / 1e3).toFixed(1)}k`
-  else body = a.toFixed(0)
-  return `${sign}$${body}`
+  return `${sign}${fmtUsd(Math.abs(n))}`
 }
 
-function pnlClass(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return 'sm-overview-pnl-val-flat'
-  return n > 0 ? 'sm-overview-pnl-val-up' : 'sm-overview-pnl-val-down'
+function fmtQty(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return '0'
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
-function estimateBucketUpl(
-  d: SmartMoneyOverviewData,
-  mark: number,
-): {
-  longTrader: number
-  longWhale: number
-  shortTrader: number
-  shortWhale: number
-} {
-  return {
-    longTrader:
-      (mark - d.longTradersAvgEntryPrice) * d.longTradersQty,
-    longWhale: (mark - d.longWhalesAvgEntryPrice) * d.longWhalesQty,
-    shortTrader:
-      (d.shortTradersAvgEntryPrice - mark) * d.shortTradersQty,
-    shortWhale:
-      (d.shortWhalesAvgEntryPrice - mark) * d.shortWhalesQty,
-  }
+const BUCKET_TABS: { id: Exclude<OverviewBucket, 'all'>; label: string }[] = [
+  { id: 'trader', label: '全体聪明钱' },
+  { id: 'whale', label: '其中大户' },
+]
+
+function pct(part: number, whole: number): string {
+  if (!(whole > 0)) return '—'
+  return `${Math.min(100, (part / whole) * 100).toFixed(0)}%`
 }
 
-/** 与「估算名义」同源：仅大户分桶，均价即接口大户均价 */
-function weightedEntryWhale(d: SmartMoneyOverviewData, side: 'long' | 'short'): number {
-  if (side === 'long') {
-    return d.longWhalesQty > 0 ? d.longWhalesAvgEntryPrice : 0
-  }
-  return d.shortWhalesQty > 0 ? d.shortWhalesAvgEntryPrice : 0
+function SubsetMeter({
+  all,
+  whale,
+  fmt,
+  tone,
+  unit,
+}: {
+  all: number
+  whale: number
+  fmt: (n: number) => string
+  tone: 'long' | 'short'
+  unit?: string
+}) {
+  const share = all > 0 ? Math.min(100, (Math.max(0, whale) / all) * 100) : 0
+  return (
+    <div className={`sm-ov-subset sm-ov-subset-${tone}`}>
+      <div className="sm-ov-subset-track" aria-hidden>
+        <div className="sm-ov-subset-whale" style={{ width: `${share}%` }} />
+      </div>
+      <div className="sm-ov-subset-labs">
+        <span>
+          全体 {fmt(all)}
+          {unit ? ` ${unit}` : ''}
+        </span>
+        <span>
+          其中大户 {fmt(whale)} · {pct(whale, all)}
+        </span>
+      </div>
+    </div>
+  )
 }
 
-type BucketTab = 'trader' | 'whale'
+function IconPos() {
+  return (
+    <svg className="sm-ov-ico" viewBox="0 0 24 24" aria-hidden>
+      <rect x="3" y="10" width="6" height="11" rx="1.2" />
+      <rect x="11" y="5" width="6" height="16" rx="1.2" />
+      <rect x="19" y="13" width="2.4" height="8" rx="0.8" />
+    </svg>
+  )
+}
+
+function IconPnl() {
+  return (
+    <svg className="sm-ov-ico" viewBox="0 0 24 24" aria-hidden>
+      <path d="M4 16.5 10 10l4 3.5 6-8" fill="none" />
+      <path d="M16 5.5h4.5V10" fill="none" />
+    </svg>
+  )
+}
+
+function IconPeople() {
+  return (
+    <svg className="sm-ov-ico" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="9" cy="8" r="3.1" fill="none" />
+      <circle cx="16.2" cy="9.2" r="2.4" fill="none" />
+      <path d="M3.5 19.5c.6-3.2 3-5 5.5-5s4.9 1.8 5.5 5" fill="none" />
+      <path d="M13.2 19.5c.4-2.2 1.8-3.5 3.4-3.5 1.7 0 3.1 1.3 3.5 3.5" fill="none" />
+    </svg>
+  )
+}
+
+function WinRing({
+  profit,
+  total,
+  tone,
+}: {
+  profit: number
+  total: number
+  tone: 'long' | 'short'
+}) {
+  const r = 18
+  const c = 2 * Math.PI * r
+  const win = total > 0 ? Math.min(1, Math.max(0, profit / total)) : 0
+  const dash = `${(win * c).toFixed(2)} ${(c - win * c).toFixed(2)}`
+  return (
+    <svg className={`sm-ov-ring sm-ov-ring-${tone}`} viewBox="0 0 48 48">
+      <circle className="sm-ov-ring-track" cx="24" cy="24" r={r} />
+      <circle
+        className="sm-ov-ring-win"
+        cx="24"
+        cy="24"
+        r={r}
+        strokeDasharray={dash}
+        transform="rotate(-90 24 24)"
+      />
+      <text x="24" y="26" textAnchor="middle">
+        {total > 0 ? `${(win * 100).toFixed(0)}%` : '—'}
+      </text>
+    </svg>
+  )
+}
+
+function PriceTiles({
+  longAvg,
+  shortAvg,
+  mark,
+  base,
+}: {
+  longAvg: number
+  shortAvg: number
+  mark: number
+  base: string
+}) {
+  const longPct = longAvg > 0 ? ((mark - longAvg) / longAvg) * 100 : 0
+  const shortPct = shortAvg > 0 ? ((shortAvg - mark) / shortAvg) * 100 : 0
+  return (
+    <div className="sm-ov-prices">
+      <div className={`sm-ov-price-tile ${longPct >= 0 ? 'is-up' : 'is-down'}`}>
+        <span>多头均价 · {base}</span>
+        <b className="mono">{formatCoinPrice(longAvg)}</b>
+        <small>相对标记 {longPct >= 0 ? '+' : '−'}{Math.abs(longPct).toFixed(1)}%</small>
+      </div>
+      <div className="sm-ov-price-tile is-mark">
+        <span>标记价</span>
+        <b className="mono">{formatCoinPrice(mark)}</b>
+        <small>现价锚点，不是持仓</small>
+      </div>
+      <div className={`sm-ov-price-tile ${shortPct >= 0 ? 'is-up' : 'is-down'}`}>
+        <span>空头均价 · {base}</span>
+        <b className="mono">{formatCoinPrice(shortAvg)}</b>
+        <small>相对标记 {shortPct >= 0 ? '+' : '−'}{Math.abs(shortPct).toFixed(1)}%</small>
+      </div>
+    </div>
+  )
+}
+
+type Seg = { key: string; label: string; value: number; cls: string }
+
+function ShareStack({ segs, unit }: { segs: Seg[]; unit?: string }) {
+  const sum = segs.reduce((a, s) => a + Math.max(0, s.value), 0)
+  return (
+    <div className="sm-ov-stack">
+      <div className="sm-ov-stack-bar">
+        {segs.map((s) => {
+          const w = sum > 0 ? (Math.max(0, s.value) / sum) * 100 : 0
+          if (w <= 0) return null
+          return (
+            <div
+              key={s.key}
+              className={`sm-ov-stack-seg ${s.cls}`}
+              style={{ width: `${w}%` }}
+              title={`${s.label} ${unit === 'usd' ? fmtUsd(s.value) : fmtQty(s.value)}`}
+            />
+          )
+        })}
+      </div>
+      <ul className="sm-ov-legend">
+        {segs.map((s) => (
+          <li key={s.key}>
+            <i className={s.cls} />
+            <span>{s.label}</span>
+            <b className="mono">
+              {unit === 'usd' ? fmtUsd(s.value) : fmtQty(s.value)}
+            </b>
+            <em>{sum > 0 ? `${((Math.max(0, s.value) / sum) * 100).toFixed(0)}%` : '—'}</em>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function UplRows({
+  rows,
+}: {
+  rows: { label: string; value: number; cls: string }[]
+}) {
+  const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.value)))
+  return (
+    <ul className="sm-ov-upl">
+      {rows.map((r) => {
+        const pct = (Math.abs(r.value) / maxAbs) * 100
+        const pos = r.value >= 0
+        return (
+          <li key={r.label} className={r.cls}>
+            <span className="sm-ov-upl-lab">{r.label}</span>
+            <div className="sm-ov-upl-track">
+              <div className="sm-ov-upl-mid" />
+              <div
+                className={`sm-ov-upl-fill ${pos ? 'is-up' : 'is-down'}`}
+                style={{
+                  width: `${pct / 2}%`,
+                  [pos ? 'left' : 'right']: '50%',
+                }}
+              />
+            </div>
+            <b className={`mono ${pos ? 'is-up' : 'is-down'}`}>{fmtUsdSigned(r.value)}</b>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
 
 export function SmartMoneyOverviewPanel({
   data,
   markPriceUsd,
 }: {
   data: SmartMoneyOverviewData
-  /** 永续标记价（USDT）；用于估算分桶未实现盈亏 */
   markPriceUsd?: number
 }) {
-  const [bucketTab, setBucketTab] = useState<BucketTab>('trader')
-
-  const longN = overviewSideNotional(data, 'long')
-  const shortN = overviewSideNotional(data, 'short')
-  const longNTrader = overviewSideNotionalTraders(data, 'long')
-  const shortNTrader = overviewSideNotionalTraders(data, 'short')
-  const sumN = longN + shortN
-  const longPct = sumN > 0 ? (longN / sumN) * 100 : 50
-
-  const longPeople = data.longTraders + data.longWhales
-  const shortPeople = data.shortTraders + data.shortWhales
-  const longProfit =
-    data.longProfitTraders + data.longProfitWhales
-  const shortProfit =
-    data.shortProfitTraders + data.shortProfitWhales
-  const longWin =
-    longPeople > 0 ? (longProfit / longPeople) * 100 : 0
-  const shortWin =
-    shortPeople > 0 ? (shortProfit / shortPeople) * 100 : 0
-
-  const longEntry = weightedEntryWhale(data, 'long')
-  const shortEntry = weightedEntryWhale(data, 'short')
-
+  const [bucketTab, setBucketTab] = useState<Exclude<OverviewBucket, 'all'>>('trader')
   const base = data.symbol.replace(/USDT$/i, '')
-
   const markOk =
     markPriceUsd != null && Number.isFinite(markPriceUsd) && markPriceUsd > 0
-  const upl = markOk
-    ? estimateBucketUpl(data, markPriceUsd!)
-    : null
-  const longUplTotal = upl
-    ? upl.longTrader + upl.longWhale
-    : NaN
-  const shortUplTotal = upl
-    ? upl.shortTrader + upl.shortWhale
-    : NaN
+  const mark = markOk ? markPriceUsd! : 0
+
+  const costLong = overviewSideNotionalByBucket(data, 'long', bucketTab)
+  const costShort = overviewSideNotionalByBucket(data, 'short', bucketTab)
+  const markLong = markOk
+    ? overviewSideMarkNotional(data, 'long', bucketTab, mark)
+    : 0
+  const markShort = markOk
+    ? overviewSideMarkNotional(data, 'short', bucketTab, mark)
+    : 0
+  const qtyLong = overviewSideQty(data, 'long', bucketTab)
+  const qtyShort = overviewSideQty(data, 'short', bucketTab)
+  const peopleLong = overviewSidePeople(data, 'long', bucketTab)
+  const peopleShort = overviewSidePeople(data, 'short', bucketTab)
+  const winLong = overviewSideProfitPeople(data, 'long', bucketTab)
+  const winShort = overviewSideProfitPeople(data, 'short', bucketTab)
+  const loseLong = Math.max(0, peopleLong - winLong)
+  const loseShort = Math.max(0, peopleShort - winShort)
+  const longAvg = overviewSideAvgEntry(data, 'long', bucketTab)
+  const shortAvg = overviewSideAvgEntry(data, 'short', bucketTab)
+  const uplLong = markOk ? overviewSideUpl(data, 'long', bucketTab, mark) : NaN
+  const uplShort = markOk ? overviewSideUpl(data, 'short', bucketTab, mark) : NaN
+
+  const qtyLongAll = overviewSideQty(data, 'long', 'trader')
+  const qtyShortAll = overviewSideQty(data, 'short', 'trader')
+  const qtyRatio =
+    qtyShortAll > 0 && Number.isFinite(qtyLongAll / qtyShortAll)
+      ? qtyLongAll / qtyShortAll
+      : undefined
+
+  const costSegs: Seg[] = [
+    {
+      key: 'l',
+      label: '多头',
+      value: overviewSideNotionalByBucket(data, 'long', 'trader'),
+      cls: 'seg-long-trader',
+    },
+    {
+      key: 's',
+      label: '空头',
+      value: overviewSideNotionalByBucket(data, 'short', 'trader'),
+      cls: 'seg-short-trader',
+    },
+  ]
+  const qtySegs: Seg[] = [
+    { key: 'l', label: '多头', value: qtyLongAll, cls: 'seg-long-trader' },
+    { key: 's', label: '空头', value: qtyShortAll, cls: 'seg-short-trader' },
+  ]
+
+  const uplRows = [
+    {
+      label: bucketTab === 'whale' ? '多·大户' : '多·全体',
+      value: markOk ? uplLong : 0,
+      cls: 'row-long',
+    },
+    {
+      label: bucketTab === 'whale' ? '空·大户' : '空·全体',
+      value: markOk ? uplShort : 0,
+      cls: 'row-short',
+    },
+  ]
+  if (bucketTab === 'trader' && markOk) {
+    uplRows.splice(1, 0, {
+      label: '多·其中大户',
+      value: overviewSideUpl(data, 'long', 'whale', mark),
+      cls: 'row-long is-nested',
+    })
+    uplRows.push({
+      label: '空·其中大户',
+      value: overviewSideUpl(data, 'short', 'whale', mark),
+      cls: 'row-short is-nested',
+    })
+  }
 
   return (
     <div className="sm-overview">
-      <div className="sm-overview-head">
-        <div className="sm-overview-chip">
-          <span className="sm-overview-chip-label">总持仓名义</span>
-          <span className="sm-overview-chip-value mono">
-            {fmtUsd(data.totalPositions)}
-          </span>
-        </div>
-        <div className="sm-overview-chip">
-          <span className="sm-overview-chip-label">交易者总数</span>
-          <span className="sm-overview-chip-value mono">
-            {data.totalTraders.toLocaleString()}
-          </span>
-        </div>
-        <div className="sm-overview-chip sm-overview-chip-wide">
-          <span className="sm-overview-chip-label">名义多空比（多/空）</span>
-          <span className="sm-overview-chip-value mono" title="接口字段 longShortRatio">
-            {Number.isFinite(data.longShortRatio)
-              ? `${data.longShortRatio.toFixed(3)}∶1`
-              : '—'}
-          </span>
-        </div>
-      </div>
+      <nav className="view-tabs sm-overview-bucket-tabs" aria-label="分桶">
+        {BUCKET_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={bucketTab === tab.id}
+            className={bucketTab === tab.id ? 'view-tab on' : 'view-tab'}
+            onClick={() => setBucketTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
-      <div className="sm-overview-pnl">
-        <div className="sm-overview-pnl-title">
-          估算未实现盈亏（USDT）
+      <section className="sm-ov-card sm-ov-card-pos">
+        <header className="sm-ov-card-h">
+          <IconPos />
+          <div>
+            <h4>持仓</h4>
+            <p>
+              接口没有散户。traders 是聪明钱全体，whales 是其中大户（子集，已含在全体里，不能相加）。
+              成本名义 = 数量 × 均价；当前名义 = 数量 × 标记价。
+            </p>
+          </div>
+        </header>
+        <div className="sm-ov-kpis">
+          <div>
+            <span>{bucketTab === 'whale' ? '大户成本名义' : '全体成本名义'}</span>
+            <b className="mono">{fmtUsd(costLong + costShort)}</b>
+            <small>
+              多 {fmtUsd(costLong)} · 空 {fmtUsd(costShort)}
+            </small>
+          </div>
+          <div>
+            <span>{bucketTab === 'whale' ? '大户当前名义' : '全体当前名义'}</span>
+            <b className="mono">{markOk ? fmtUsd(markLong + markShort) : '—'}</b>
+            <small>
+              {markOk
+                ? `多 ${fmtUsd(markLong)} · 空 ${fmtUsd(markShort)}`
+                : '待标记价'}
+            </small>
+          </div>
+          <div>
+            <span>持仓数量（{base}）</span>
+            <b className="mono">{fmtQty(qtyLong + qtyShort)}</b>
+            <small>
+              多 {fmtQty(qtyLong)} · 空 {fmtQty(qtyShort)}
+            </small>
+          </div>
+          <div>
+            <span>接口总名义</span>
+            <b className="mono">{fmtUsd(data.totalPositions)}</b>
+            <small>
+              多空比 {Number.isFinite(data.longShortRatio) ? `${data.longShortRatio.toFixed(3)}∶1` : '—'}
+              {qtyRatio != null ? ` · 数量比 ${qtyRatio.toFixed(3)}∶1` : ''}
+            </small>
+          </div>
+        </div>
+        <h5>全体多空 · 成本名义</h5>
+        <ShareStack segs={costSegs} unit="usd" />
+        <h5>大户占全体 · 成本</h5>
+        <SubsetMeter
+          all={overviewSideNotionalByBucket(data, 'long', 'trader')}
+          whale={overviewSideNotionalByBucket(data, 'long', 'whale')}
+          fmt={fmtUsd}
+          tone="long"
+        />
+        <SubsetMeter
+          all={overviewSideNotionalByBucket(data, 'short', 'trader')}
+          whale={overviewSideNotionalByBucket(data, 'short', 'whale')}
+          fmt={fmtUsd}
+          tone="short"
+        />
+        <h5>全体多空 · 持仓数量（{base}）</h5>
+        <ShareStack segs={qtySegs} />
+        <h5>大户占全体 · 数量</h5>
+        <SubsetMeter
+          all={qtyLongAll}
+          whale={overviewSideQty(data, 'long', 'whale')}
+          fmt={fmtQty}
+          tone="long"
+        />
+        <SubsetMeter
+          all={qtyShortAll}
+          whale={overviewSideQty(data, 'short', 'whale')}
+          fmt={fmtQty}
+          tone="short"
+        />
+        {markOk ? (
+          <PriceTiles longAvg={longAvg} shortAvg={shortAvg} mark={mark} base={base} />
+        ) : (
+          <p className="muted small sm-overview-pnl-wait">标记价加载后显示均价相对位置。</p>
+        )}
+      </section>
+
+      <section className="sm-ov-card sm-ov-card-pnl">
+        <header className="sm-ov-card-h">
+          <IconPnl />
+          <div>
+            <h4>浮盈金额</h4>
+            <p>
+              净额按当前 Tab。其中大户已包含在全体里，不要把两行再加总。
+            </p>
+          </div>
           {markOk ? (
-            <span className="sm-overview-pnl-mark muted small">
-              标记价 {formatCoinPrice(markPriceUsd!)}
-            </span>
-          ) : (
-            <span className="sm-overview-pnl-mark muted small">
-              待标记价加载后按均价估算
-            </span>
-          )}
-        </div>
-        {markOk && upl ? (
-          <>
-            <nav
-              className="view-tabs sm-overview-bucket-tabs"
-              aria-label="未实现盈亏分桶"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={bucketTab === 'trader'}
-                className={bucketTab === 'trader' ? 'view-tab on' : 'view-tab'}
-                onClick={() => setBucketTab('trader')}
-              >
-                普通
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={bucketTab === 'whale'}
-                className={bucketTab === 'whale' ? 'view-tab on' : 'view-tab'}
-                onClick={() => setBucketTab('whale')}
-              >
-                大户
-              </button>
-            </nav>
-            <dl className="sm-overview-pnl-dl" key={bucketTab}>
-              {bucketTab === 'trader' ? (
-                <>
-                  <div>
-                    <dt>多头</dt>
-                    <dd className={`mono ${pnlClass(upl.longTrader)}`}>
-                      {fmtUsdSigned(upl.longTrader)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>空头</dt>
-                    <dd className={`mono ${pnlClass(upl.shortTrader)}`}>
-                      {fmtUsdSigned(upl.shortTrader)}
-                    </dd>
-                  </div>
-                  <div className="sm-overview-pnl-net">
-                    <dt>多空净额</dt>
-                    <dd
-                      className={`mono ${pnlClass(upl.longTrader + upl.shortTrader)}`}
-                    >
-                      {fmtUsdSigned(upl.longTrader + upl.shortTrader)}
-                    </dd>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <dt>多头</dt>
-                    <dd className={`mono ${pnlClass(upl.longWhale)}`}>
-                      {fmtUsdSigned(upl.longWhale)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>空头</dt>
-                    <dd className={`mono ${pnlClass(upl.shortWhale)}`}>
-                      {fmtUsdSigned(upl.shortWhale)}
-                    </dd>
-                  </div>
-                  <div className="sm-overview-pnl-net">
-                    <dt>多空净额</dt>
-                    <dd
-                      className={`mono ${pnlClass(upl.longWhale + upl.shortWhale)}`}
-                    >
-                      {fmtUsdSigned(upl.longWhale + upl.shortWhale)}
-                    </dd>
-                  </div>
-                </>
-              )}
-            </dl>
-          </>
-        ) : null}
-        {markOk &&
-        upl &&
-        longUplTotal < 0 &&
-        shortUplTotal < 0 &&
-        longEntry > markPriceUsd! &&
-        shortEntry < markPriceUsd! ? (
-          <p className="muted small sm-overview-pnl-note">
-            标记价介于多空加权均价之间时，聪明钱多头与空头可同时为浮亏：多头开仓整体偏高、空头开仓整体偏低，现价落在中间则两侧相对入场价都吃亏。全市场近似零和，此处未计入对手盘（非聪明钱）。
-          </p>
-        ) : null}
-        {!markOk || !upl ? (
-          <p className="muted small sm-overview-pnl-wait">
-            接口不直接返回盈亏金额；指数区标记价就绪后，此处用「持仓量 ×（标记价 −
-            分桶均价）」估算多头，空头方向相反。
-          </p>
-        ) : null}
-      </div>
+            <strong className={`sm-ov-net mono ${uplLong + uplShort >= 0 ? 'is-up' : 'is-down'}`}>
+              净额 {fmtUsdSigned(uplLong + uplShort)}
+            </strong>
+          ) : null}
+        </header>
+        {markOk ? (
+          <UplRows rows={uplRows} />
+        ) : (
+          <p className="muted small sm-overview-pnl-wait">待标记价后估算浮盈金额。</p>
+        )}
+      </section>
 
-      <div className="sm-overview-bar-wrap" aria-hidden>
-        <div
-          className="sm-overview-bar sm-overview-bar-long"
-          style={{ width: `${longPct}%` }}
-        />
-        <div
-          className="sm-overview-bar sm-overview-bar-short"
-          style={{ width: `${100 - longPct}%` }}
-        />
-      </div>
-      <p className="muted small sm-overview-bar-legend">
-        条带为按大户分桶估算的多空名义占比（{longPct.toFixed(1)}% /{' '}
-        {(100 - longPct).toFixed(1)}%）；与上方比值相互校验。
-      </p>
-
-      <div className="sm-overview-cols">
-        <div className="sm-overview-side sm-overview-side-long">
-          <div className="sm-overview-side-head">
-            <span className="sm-overview-badge sm-overview-badge-long">
-              多
-            </span>
-            <span className="sm-overview-side-title">
-              {longPeople.toLocaleString()} 人
-            </span>
-            {longWin >= 50 ? (
-              <span className="sm-overview-tag sm-overview-tag-up">
-                盈利人数占优
-              </span>
-            ) : (
-              <span className="sm-overview-tag sm-overview-tag-mid">
-                亏损人数偏多
-              </span>
-            )}
+      <section className="sm-ov-card sm-ov-card-people">
+        <header className="sm-ov-card-h">
+          <IconPeople />
+          <div>
+            <h4>盈亏人数</h4>
+            <p>
+              totalTraders = 多头全体 + 空头全体（{data.totalTraders.toLocaleString()}）。大户是其中人数，不是另一批散户。
+            </p>
           </div>
-          <dl className="sm-overview-dl">
+        </header>
+        <div className="sm-ov-people">
+          <div className="sm-ov-people-col">
+            <WinRing profit={winLong} total={peopleLong} tone="long" />
             <div>
-              <dt>估算名义（多·大户）</dt>
-              <dd className="mono">{fmtUsd(longN)}</dd>
+              <h5>多头 {peopleLong.toLocaleString()} 人</h5>
+              <div className="sm-ov-people-bar">
+                <span style={{ width: `${peopleLong ? (winLong / peopleLong) * 100 : 0}%` }} />
+              </div>
+              <small>
+                盈利 {winLong} · 亏损 {loseLong}
+              </small>
             </div>
-            <div>
-              <dt>估算名义（多·交易员）</dt>
-              <dd className="mono">{fmtUsd(longNTrader)}</dd>
-            </div>
-            <div>
-              <dt>加权均价（大户，{base}）</dt>
-              <dd className="mono">{formatCoinPrice(longEntry)}</dd>
-            </div>
-            <div>
-              <dt>普通 / 大户</dt>
-              <dd className="mono">
-                {data.longTraders} / {data.longWhales}
-              </dd>
-            </div>
-            <div>
-              <dt>持仓量（大户）</dt>
-              <dd className="mono">
-                {data.longWhalesQty.toLocaleString(undefined, {
-                  maximumFractionDigits: 4,
-                })}{' '}
-                {base}
-              </dd>
-            </div>
-            <div>
-              <dt>盈利人数占比</dt>
-              <dd className="mono sm-overview-win">
-                {longPeople > 0 ? `${longWin.toFixed(2)}%` : '—'}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="sm-overview-divider" />
-
-        <div className="sm-overview-side sm-overview-side-short">
-          <div className="sm-overview-side-head">
-            <span className="sm-overview-badge sm-overview-badge-short">
-              空
-            </span>
-            <span className="sm-overview-side-title">
-              {shortPeople.toLocaleString()} 人
-            </span>
-            {shortWin >= 50 ? (
-              <span className="sm-overview-tag sm-overview-tag-up">
-                盈利人数占优
-              </span>
-            ) : (
-              <span className="sm-overview-tag sm-overview-tag-down">
-                亏损人数偏多
-              </span>
-            )}
           </div>
-          <dl className="sm-overview-dl">
+          <div className="sm-ov-people-col">
+            <WinRing profit={winShort} total={peopleShort} tone="short" />
             <div>
-              <dt>估算名义（空·大户）</dt>
-              <dd className="mono">{fmtUsd(shortN)}</dd>
+              <h5>空头 {peopleShort.toLocaleString()} 人</h5>
+              <div className="sm-ov-people-bar is-short">
+                <span style={{ width: `${peopleShort ? (winShort / peopleShort) * 100 : 0}%` }} />
+              </div>
+              <small>
+                盈利 {winShort} · 亏损 {loseShort}
+              </small>
             </div>
-            <div>
-              <dt>估算名义（空·交易员）</dt>
-              <dd className="mono">{fmtUsd(shortNTrader)}</dd>
-            </div>
-            <div>
-              <dt>加权均价（大户，{base}）</dt>
-              <dd className="mono">{formatCoinPrice(shortEntry)}</dd>
-            </div>
-            <div>
-              <dt>普通 / 大户</dt>
-              <dd className="mono">
-                {data.shortTraders} / {data.shortWhales}
-              </dd>
-            </div>
-            <div>
-              <dt>持仓量（大户）</dt>
-              <dd className="mono">
-                {data.shortWhalesQty.toLocaleString(undefined, {
-                  maximumFractionDigits: 4,
-                })}{' '}
-                {base}
-              </dd>
-            </div>
-            <div>
-              <dt>盈利人数占比</dt>
-              <dd className="mono sm-overview-win">
-                {shortPeople > 0 ? `${shortWin.toFixed(2)}%` : '—'}
-              </dd>
-            </div>
-          </dl>
+          </div>
         </div>
-      </div>
-
-      <p className="muted small sm-overview-foot">
-        数据来源 Binance 合约聪明钱公开接口。条带占比与聪明天平扫描仅取大户分桶（大户 qty ×
-        大户开仓均价）；下方同时列出交易员分桶（普通 qty × 普通开仓均价）估算名义供对照，两类名义勿简单相加合并。普通与大户人数仍分别列出。盈亏为按标记价与各分桶均价的估算，非官方逐笔汇总；上方
-        Tab 切换「普通 / 大户」对应未实现盈亏分桶，各行「多空净额」仅为该分桶内多+空。聪明钱仅为市场子集，多空两侧估算盈亏之和不必为零（对手多为非聪明钱）。
-      </p>
+        <ul className="sm-ov-people-split">
+          <li>
+            多头全体 {overviewSidePeople(data, 'long', 'trader')} · 其中大户{' '}
+            {overviewSidePeople(data, 'long', 'whale')}（盈{' '}
+            {overviewSideProfitPeople(data, 'long', 'whale')}）
+          </li>
+          <li>
+            空头全体 {overviewSidePeople(data, 'short', 'trader')} · 其中大户{' '}
+            {overviewSidePeople(data, 'short', 'whale')}（盈{' '}
+            {overviewSideProfitPeople(data, 'short', 'whale')}）
+          </li>
+        </ul>
+      </section>
     </div>
   )
 }

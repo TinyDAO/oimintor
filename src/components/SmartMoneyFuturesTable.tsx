@@ -111,15 +111,13 @@ export function SmartMoneyFuturesTable({
             <Th k="netPct">成交量占比</Th>
             <th className="th-no-sort">多名义</th>
             <th className="th-no-sort">空名义</th>
-            <th className="th-no-sort">多·人数</th>
-            <th className="th-no-sort">空·人数</th>
+            <th className="th-no-sort">多·全体</th>
+            <th className="th-no-sort">空·全体</th>
             <th className="th-no-sort">操作</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((r, i) => {
-            const longP = r.longTraders + r.longWhales
-            const shortP = r.shortTraders + r.shortWhales
             return (
               <tr
                 key={`${r.symbol}-${i}`}
@@ -141,17 +139,13 @@ export function SmartMoneyFuturesTable({
                 <td className="mono num">{netNotionalPct(r).toFixed(2)}%</td>
                 <td className="mono num muted-soft">{fmtUsd(r.longNotional)}</td>
                 <td className="mono num muted-soft">{fmtUsd(r.shortNotional)}</td>
-                <td className="mono num sm-people">
-                  {longP}
-                  <span className="sm-wh">
-                    （鲸 {r.longWhales}）
-                  </span>
+                <td className="mono num sm-people" title="全体聪明钱人数；大户是其中子集">
+                  {r.longTraders}
+                  <span className="sm-wh">（大户 {r.longWhales}）</span>
                 </td>
-                <td className="mono num sm-people">
-                  {shortP}
-                  <span className="sm-wh">
-                    （鲸 {r.shortWhales}）
-                  </span>
+                <td className="mono num sm-people" title="全体聪明钱人数；大户是其中子集">
+                  {r.shortTraders}
+                  <span className="sm-wh">（大户 {r.shortWhales}）</span>
                 </td>
                 <td
                   className="sm-futures-actions"

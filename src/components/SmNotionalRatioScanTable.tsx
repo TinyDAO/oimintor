@@ -124,18 +124,18 @@ export function SmNotionalRatioScanTable({
           <tr>
             <Th k="symbol">合约</Th>
             <Th k="ratioLs">
-              <span title="overview 快照：多估算名义 ÷ 空估算名义">
-                多∶空名义比
+              <span title="其中大户成本名义比（qty × 开仓均价），不是全体数量比">
+                大户多∶空
               </span>
             </Th>
             <Th k="longNotional">
-              <span title="overview 快照：多侧大户 qty × 大户开仓均价（与详情一致）">
-                估算名义（多）
+              <span title="其中大户：多侧 qty × 开仓均价">
+                大户名义（多）
               </span>
             </Th>
             <Th k="shortNotional">
-              <span title="overview 快照：空侧大户 qty × 大户开仓均价（与详情一致）">
-                估算名义（空）
+              <span title="其中大户：空侧 qty × 开仓均价">
+                大户名义（空）
               </span>
             </Th>
             <Th k="totalNs">名义合计</Th>

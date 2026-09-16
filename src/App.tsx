@@ -1062,7 +1062,7 @@ export default function App() {
                     variantScan?.phase === 'loading'
                   }
                   onClick={() => void runSmNotionalRatioScan()}
-                  title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：聪明钱多/空估算名义比；统计周期与「聪明钱」页一致（当前 ${labelSmRange(smRange)}）`}
+                  title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：其中大户成本名义多/空比（不是全体数量比）`}
                 >
                   {SM_NOTIONAL_RATIO_SCAN_TITLE}
                 </button>

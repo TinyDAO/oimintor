@@ -18,9 +18,12 @@ export type SmartMoneyFuturesRow = {
   netNotional: number
   longNotional: number
   shortNotional: number
+  /** 全体聪明钱人数；whales 是其中大户，勿相加 */
   longTraders: number
+  /** 其中大户人数，已含在 longTraders 内，勿与全体相加 */
   longWhales: number
   shortTraders: number
+  /** 其中大户人数，已含在 shortTraders 内 */
   shortWhales: number
   longQty: number
   shortQty: number
@@ -122,16 +125,19 @@ export async function fetchSmartMoneyFuturesSignals(
 
 /**
  * GET …/smart-money/signal/overview?symbol= — 与合约页「聪明钱总览」同源。
- * 无 timeRange；前端用大户分桶 qty×均价 还原的「估算名义」为当前持仓快照，勿与 signal/list 周期名义逐项对比。
+ * 无 timeRange。*Traders* 为聪明钱全体，*Whales* 为其中大户（子集，不可相加）。
+ * 聪明天平 / 聪明扫描的「大户名义」用 whales qty × 均价，勿与全体 qty 再加总。
  */
 export type SmartMoneyOverviewData = {
   symbol: string
   /** 交易员总持仓名义（USDT，接口字段） */
   totalPositions: number
   totalTraders: number
-  /** 多头名义 / 空头名义 */
+  /** 多头数量 / 空头数量（全体聪明钱 qty，不是名义、也不是大户） */
   longShortRatio: number
+  /** 多头全体人数（聪明钱 traders） */
   longTraders: number
+  /** 多头其中大户人数（whales ⊂ traders） */
   longWhales: number
   longTradersQty: number
   longWhalesQty: number
@@ -145,6 +151,7 @@ export type SmartMoneyOverviewData = {
   shortWhalesAvgEntryPrice: number
   longProfitTraders: number
   shortProfitTraders: number
+  /** 其中大户浮盈人数，已含在对应 *ProfitTraders 内 */
   longProfitWhales: number
   shortProfitWhales: number
 }
@@ -173,26 +180,111 @@ export async function fetchSmartMoneyOverview(
   return j.data
 }
 
-/** overview 快照口径的多/空估算名义（仅大户分桶：qty × 开仓均价） */
+/**
+ * trader = 聪明钱全体（接口 *Traders*）；whale = 其中大户（*Whales*，子集）。
+ * all 与 trader 同义。两套不能相加，否则把大户算两遍。
+ */
+export type OverviewBucket = 'trader' | 'whale' | 'all'
+
+function resolveBucket(bucket: OverviewBucket): 'trader' | 'whale' {
+  return bucket === 'whale' ? 'whale' : 'trader'
+}
+
+/** overview 快照口径的多/空估算名义（仅大户：qty × 开仓均价） */
 export function overviewSideNotional(
   d: SmartMoneyOverviewData,
   side: 'long' | 'short',
 ): number {
-  if (side === 'long') {
-    return d.longWhalesQty * d.longWhalesAvgEntryPrice
-  }
-  return d.shortWhalesQty * d.shortWhalesAvgEntryPrice
+  return overviewSideNotionalByBucket(d, side, 'whale')
 }
 
-/** overview 快照：普通（交易员）分桶 qty × 开仓均价；与大户分桶并列展示，勿相加合并 */
+/** overview 快照：聪明钱全体 qty × 开仓均价 */
 export function overviewSideNotionalTraders(
   d: SmartMoneyOverviewData,
   side: 'long' | 'short',
 ): number {
+  return overviewSideNotionalByBucket(d, side, 'trader')
+}
+
+export function overviewSideQty(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+): number {
+  const b = resolveBucket(bucket)
   if (side === 'long') {
-    return d.longTradersQty * d.longTradersAvgEntryPrice
+    return b === 'whale' ? d.longWhalesQty : d.longTradersQty
   }
-  return d.shortTradersQty * d.shortTradersAvgEntryPrice
+  return b === 'whale' ? d.shortWhalesQty : d.shortTradersQty
+}
+
+export function overviewSideAvgEntry(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+): number {
+  const b = resolveBucket(bucket)
+  if (b === 'whale') {
+    return side === 'long' ? d.longWhalesAvgEntryPrice : d.shortWhalesAvgEntryPrice
+  }
+  return side === 'long' ? d.longTradersAvgEntryPrice : d.shortTradersAvgEntryPrice
+}
+
+/** 分桶估算名义：qty × 开仓均价。全体与大户是包含关系，不可相加。 */
+export function overviewSideNotionalByBucket(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+): number {
+  return overviewSideQty(d, side, bucket) * overviewSideAvgEntry(d, side, bucket)
+}
+
+export function overviewSidePeople(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+): number {
+  const b = resolveBucket(bucket)
+  if (side === 'long') {
+    return b === 'whale' ? d.longWhales : d.longTraders
+  }
+  return b === 'whale' ? d.shortWhales : d.shortTraders
+}
+
+export function overviewSideProfitPeople(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+): number {
+  const b = resolveBucket(bucket)
+  if (side === 'long') {
+    return b === 'whale' ? d.longProfitWhales : d.longProfitTraders
+  }
+  return b === 'whale' ? d.shortProfitWhales : d.shortProfitTraders
+}
+
+/** 当前持仓名义（标记价 × qty），与开仓成本名义不同 */
+export function overviewSideMarkNotional(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+  mark: number,
+): number {
+  if (!(mark > 0)) return 0
+  return overviewSideQty(d, side, bucket) * mark
+}
+
+/** 多头：当前名义 − 成本名义；空头：成本名义 − 当前名义 */
+export function overviewSideUpl(
+  d: SmartMoneyOverviewData,
+  side: 'long' | 'short',
+  bucket: OverviewBucket,
+  mark: number,
+): number {
+  const cost = overviewSideNotionalByBucket(d, side, bucket)
+  const now = overviewSideMarkNotional(d, side, bucket, mark)
+  if (!(cost > 0) && !(now > 0)) return 0
+  return side === 'long' ? now - cost : cost - now
 }
 
 /** 并发拉取多个 symbol 的 overview，单个失败不阻塞其它 */

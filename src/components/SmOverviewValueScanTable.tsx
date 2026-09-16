@@ -4,7 +4,11 @@ import type {
   SmOverviewValueScanRow,
   SmOverviewValueSide,
 } from '../lib/smOverviewValueScan'
-import { SM_OVERVIEW_VALUE_MIN_NOTIONAL } from '../lib/smOverviewValueScan'
+import {
+  SM_OVERVIEW_VALUE_MIN_NOTIONAL,
+  formatSmOverviewLongShortRatio,
+  smOverviewLongShortRatio,
+} from '../lib/smOverviewValueScan'
 import { BinanceFuturesLink } from './BinanceLink'
 
 function fmtUsd(n: number): string {
@@ -118,10 +122,10 @@ export function SmOverviewValueScanTable({
                   对侧价值
                 </th>
                 <th scope="col" className="num">
-                  大户数
+                  数量多空比
                 </th>
                 <th scope="col" className="num">
-                  交易者数
+                  全体人数
                 </th>
                 <th scope="col">操作</th>
               </tr>
@@ -129,6 +133,7 @@ export function SmOverviewValueScanTable({
             <tbody>
               {rows.map((r, i) => {
                 const inverted = r.oppositeNotional > r.notional
+                const lsRatio = smOverviewLongShortRatio(r)
                 return (
                   <tr
                     key={`${r.side}-${r.symbol}`}
@@ -174,11 +179,30 @@ export function SmOverviewValueScanTable({
                     <td className="mono num muted-soft">
                       {fmtUsd(r.oppositeNotional)}
                     </td>
-                    <td className="mono num muted-soft">
-                      {tab === 'long' ? r.longWhales : r.shortWhales}
+                    <td
+                      className="mono num"
+                      title="接口 longShortRatio = 全体多头qty / 全体空头qty；旧缓存无该字段时回退为大户成本名义比"
+                    >
+                      <span
+                        className={
+                          lsRatio != null && lsRatio > 1
+                            ? 'sm-net--buy'
+                            : lsRatio != null && lsRatio < 1
+                              ? 'sm-net--sell'
+                              : undefined
+                        }
+                      >
+                        {formatSmOverviewLongShortRatio(lsRatio)}
+                      </span>
                     </td>
-                    <td className="mono num muted-soft">
+                    <td
+                      className="mono num muted-soft"
+                      title="全体聪明钱人数；大户是其中子集，已含在全体内"
+                    >
                       {tab === 'long' ? r.longTraders : r.shortTraders}
+                      <span className="sm-wh">
+                        （大户 {tab === 'long' ? r.longWhales : r.shortWhales}）
+                      </span>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {onOpenDetail ? (

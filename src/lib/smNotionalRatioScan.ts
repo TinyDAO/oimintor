@@ -24,7 +24,7 @@ export type SmNotionalRatioRow = {
   shortWhales: number
 }
 
-/** 聪明天平：与详情「聪明钱总览 · 估算名义」同源（overview 大户分桶 qty × 均价） */
+/** 聪明天平：与详情同源，仅用其中大户成本名义（whales ⊂ traders，不与全体相加） */
 export const SM_NOTIONAL_RATIO_SCAN_TITLE = '聪明天平'
 
 export function computeLsRatio(longN: number, shortN: number): number {

@@ -718,8 +718,8 @@ export function DetailDrawer({
               <h2>聪明钱 · {SM_NOTIONAL_RATIO_SCAN_TITLE}</h2>
               <p className="muted small">
                 先用聪明钱「{labelSmRange(smNotionalRatioScan.timeRange)}」列表筛出活跃合约，
-                再逐个调用 overview 接口；多/空估算名义仅取大户分桶（大户 qty × 大户开仓均价），
-                与详情页「聪明钱总览 · 估算名义」完全一致。默认按多空比从高到低排序。
+                再逐个拉 overview。比值只用其中大户成本名义（大户 qty × 均价）；大户已包含在全体聪明钱里，没有再和大户相加。
+                默认按该比值从高到低排序。
               </p>
               {smNotionalRatioScan.phase === 'done' ? (
                 <p className="muted small drawer-variant-cache-line">
@@ -906,7 +906,8 @@ export function DetailDrawer({
               <h2>{RETAIL_WHALE_DIVERGENCE_SCAN_TITLE}</h2>
               <p className="muted small">
                 扫描全部正在交易的 USDT-M 永续合约多空比三轨，筛出「大户持仓多空比」与「用户多空比」分处 1
-                两侧的相反行为；默认按双方远离 1 的反差强度从大到小排序。
+                两侧的相反行为；默认按双方远离 1 的反差强度从大到小排序。这是全市场 LSR，与聪明钱
+                Traders/Whales 不是同一套字段。
               </p>
               {retailWhaleDivergenceScan.phase === 'done' ? (
                 <p className="muted small drawer-variant-cache-line">
@@ -1242,8 +1243,7 @@ export function DetailDrawer({
         <section className="drawer-section">
           <h3>聪明钱总览</h3>
           <p className="muted small" style={{ marginTop: 0 }}>
-            接口 overview（无统计周期）：下方「估算名义（多/空）」为各侧大户持仓量 × 大户开仓均价，表示当前聪明钱大户分桶快照；
-            聪明天平扫描结果直接基于这两值的比，相同合约数据应当一致。
+            接口没有散户字段：全体 = *Traders*，大户 = *Whales*（子集）。聪明天平扫描仍用大户成本名义。
           </p>
           {smOvLoading ? (
             <div className="sk sk-line" style={{ height: 140, borderRadius: 8 }} />

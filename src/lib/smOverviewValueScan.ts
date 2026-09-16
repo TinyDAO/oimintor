@@ -20,6 +20,8 @@ export type SmOverviewValueScanRow = {
   oppositeNotional: number
   longNotional: number
   shortNotional: number
+  /** 接口 longShortRatio：全体多头qty/空头qty；旧缓存可能缺失，回退用大户成本名义比 */
+  longShortRatio?: number
   longWhales: number
   shortWhales: number
   longTraders: number
@@ -152,6 +154,7 @@ function rowForSide(
 ): Omit<SmOverviewValueScanRow, 'isNew'> {
   const longNotional = overviewSideNotional(d, 'long')
   const shortNotional = overviewSideNotional(d, 'short')
+  const longShortRatio = Number(d.longShortRatio)
   return {
     symbol: d.symbol.toUpperCase(),
     side,
@@ -159,11 +162,28 @@ function rowForSide(
     oppositeNotional: side === 'long' ? shortNotional : longNotional,
     longNotional,
     shortNotional,
+    longShortRatio: Number.isFinite(longShortRatio) ? longShortRatio : undefined,
     longWhales: d.longWhales,
     shortWhales: d.shortWhales,
     longTraders: d.longTraders,
     shortTraders: d.shortTraders,
   }
+}
+
+/** 优先接口数量比；无字段时用大户成本名义比回退（旧缓存） */
+export function smOverviewLongShortRatio(
+  row: Pick<SmOverviewValueScanRow, 'longNotional' | 'shortNotional' | 'longShortRatio'>,
+): number | undefined {
+  if (Number.isFinite(row.longShortRatio)) return row.longShortRatio
+  if (row.shortNotional > 0 && Number.isFinite(row.longNotional)) {
+    return row.longNotional / row.shortNotional
+  }
+  return undefined
+}
+
+export function formatSmOverviewLongShortRatio(ratio: number | undefined): string {
+  if (ratio == null || !Number.isFinite(ratio)) return '—'
+  return `${ratio.toFixed(3)}∶1`
 }
 
 function sortRows<T extends { symbol: string; notional: number }>(rows: T[]): T[] {
