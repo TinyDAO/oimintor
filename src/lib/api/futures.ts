@@ -60,6 +60,17 @@ export async function fetchPremiumIndex(
   )
 }
 
+/** 不带 symbol：全部 USDT-M 标记价 */
+export async function fetchPremiumIndexAll(
+  signal?: AbortSignal,
+): Promise<PremiumIndex[]> {
+  const data = await getJson<PremiumIndex | PremiumIndex[]>(
+    fapi('/fapi/v1/premiumIndex'),
+    signal,
+  )
+  return Array.isArray(data) ? data : [data]
+}
+
 /** Binance 合约指数成分（各所现货/指数源及权重） */
 export type IndexConstituentRow = {
   exchange: string

@@ -118,6 +118,13 @@ export function SmOverviewValueScanTable({
                 <th scope="col" className="num">
                   {sideLabel(tab)}价值
                 </th>
+                <th
+                  scope="col"
+                  className="num"
+                  title="本侧大户浮盈：标记价名义相对开仓成本；与详情页聪明钱总览同一口径"
+                >
+                  大户浮盈
+                </th>
                 <th scope="col" className="num">
                   对侧价值
                 </th>
@@ -169,6 +176,9 @@ export function SmOverviewValueScanTable({
                           }`}
                         >
                           Δ {diffLabel(r.deltaFromYesterday)}
+                          {r.deltaPctFromYesterday != null
+                            ? ` ${pctLabel(r.deltaPctFromYesterday)}`
+                            : ''}
                         </span>
                       ) : null}
                     </td>
@@ -176,6 +186,30 @@ export function SmOverviewValueScanTable({
                       {fmtUsd(r.notional - r.oppositeNotional)}
                     </td>
                     <td className="mono num">{fmtUsd(r.notional)}</td>
+                    <td
+                      className="mono num"
+                      title="本侧大户：当前名义 − 成本名义（空头相反）"
+                    >
+                      {r.upl == null || !Number.isFinite(r.upl) ? (
+                        '—'
+                      ) : (
+                        <span
+                          className={
+                            r.upl > 0
+                              ? 'sm-net--buy'
+                              : r.upl < 0
+                                ? 'sm-net--sell'
+                                : undefined
+                          }
+                        >
+                          {r.upl > 0 ? '+' : r.upl < 0 ? '−' : ''}
+                          {fmtUsd(Math.abs(r.upl))}
+                          {r.uplPct != null && Number.isFinite(r.uplPct)
+                            ? ` ${pctLabel(r.uplPct)}`
+                            : ''}
+                        </span>
+                      )}
+                    </td>
                     <td className="mono num muted-soft">
                       {fmtUsd(r.oppositeNotional)}
                     </td>

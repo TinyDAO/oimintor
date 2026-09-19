@@ -1,5 +1,6 @@
 import {
   overviewSideNotional,
+  overviewSideUpl,
   type SmartMoneyOverviewData,
 } from './api/smartMoneyFutures'
 
@@ -26,6 +27,10 @@ export type SmOverviewValueScanRow = {
   shortWhales: number
   longTraders: number
   shortTraders: number
+  /** 本侧大户浮盈：标记价名义 − 成本名义（空头相反）；旧缓存可能缺失 */
+  upl?: number
+  /** upl / 本侧大户成本；旧缓存可能缺失 */
+  uplPct?: number
   isNew: boolean
   yesterdayNotional?: number
   deltaFromYesterday?: number
@@ -151,14 +156,18 @@ function parseStoredScan(raw: string | null): StoredScan {
 function rowForSide(
   d: SmartMoneyOverviewData,
   side: SmOverviewValueSide,
+  mark?: number,
 ): Omit<SmOverviewValueScanRow, 'isNew'> {
   const longNotional = overviewSideNotional(d, 'long')
   const shortNotional = overviewSideNotional(d, 'short')
+  const notional = side === 'long' ? longNotional : shortNotional
   const longShortRatio = Number(d.longShortRatio)
+  const markOk = mark != null && Number.isFinite(mark) && mark > 0
+  const upl = markOk ? overviewSideUpl(d, side, 'whale', mark) : undefined
   return {
     symbol: d.symbol.toUpperCase(),
     side,
-    notional: side === 'long' ? longNotional : shortNotional,
+    notional,
     oppositeNotional: side === 'long' ? shortNotional : longNotional,
     longNotional,
     shortNotional,
@@ -167,6 +176,11 @@ function rowForSide(
     shortWhales: d.shortWhales,
     longTraders: d.longTraders,
     shortTraders: d.shortTraders,
+    upl: upl != null && Number.isFinite(upl) ? upl : undefined,
+    uplPct:
+      upl != null && Number.isFinite(upl) && notional > 0
+        ? upl / notional
+        : undefined,
   }
 }
 
@@ -199,6 +213,7 @@ export function buildSmOverviewValueSnapshot(
   totalCount: number,
   failedCount: number,
   nowMs: number = Date.now(),
+  markBySymbol?: Readonly<Record<string, number>>,
 ): SmOverviewValueScanDaySnapshot {
   const longRows: Omit<SmOverviewValueScanRow, 'isNew'>[] = []
   const shortRows: Omit<SmOverviewValueScanRow, 'isNew'>[] = []
@@ -208,16 +223,17 @@ export function buildSmOverviewValueSnapshot(
     const normalized = { ...data, symbol: (data.symbol || symbol).toUpperCase() }
     const longNotional = overviewSideNotional(normalized, 'long')
     const shortNotional = overviewSideNotional(normalized, 'short')
+    const mark = markBySymbol?.[normalized.symbol]
     allRows.push({
       symbol: normalized.symbol,
       longNotional,
       shortNotional,
     })
     if (longNotional >= SM_OVERVIEW_VALUE_MIN_NOTIONAL) {
-      longRows.push(rowForSide(normalized, 'long'))
+      longRows.push(rowForSide(normalized, 'long', mark))
     }
     if (shortNotional >= SM_OVERVIEW_VALUE_MIN_NOTIONAL) {
-      shortRows.push(rowForSide(normalized, 'short'))
+      shortRows.push(rowForSide(normalized, 'short', mark))
     }
   }
 

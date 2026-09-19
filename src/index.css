@@ -960,7 +960,27 @@ body::before {
 }
 
 .sm-ov-subset {
+  position: relative;
   margin: 0.28rem 0 0.45rem;
+}
+
+.sm-ov-subset-scale {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.sm-ov-subset::before {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
 }
 
 .sm-ov-subset-track {
@@ -969,6 +989,21 @@ body::before {
   border-radius: 99px;
   background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
+}
+
+.sm-ov-stack-bar {
+  display: flex;
+  align-items: stretch;
+  height: 12px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sm-ov-stack-ratio {
+  margin: 0.28rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text);
 }
 
 .sm-ov-subset-whale {

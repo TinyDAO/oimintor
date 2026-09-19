@@ -15,7 +15,7 @@ import {
   type SmartMoneyFuturesRow,
   type SmartMoneyTimeRange,
 } from './lib/api/smartMoneyFutures'
-import { fetchExchangeInfo } from './lib/api/futures'
+import { fetchExchangeInfo, fetchPremiumIndexAll } from './lib/api/futures'
 import { perpetualUsdtSymbols } from './lib/binance/universe'
 import {
   findOiCrossesAboveThreshold,
@@ -488,26 +488,38 @@ export default function App() {
         phase: 'loading',
         progress: `逐合约拉取聪明钱总览快照 0/${symbols.length}…`,
       })
-      const { ok, failed } = await fetchSmartMoneyOverviews(
-        symbols,
-        (done, total) => {
-          setSmOverviewValueScan((s) =>
-            s?.phase === 'loading'
-              ? {
-                  ...s,
-                  progress: `逐合约拉取聪明钱总览快照 ${done}/${total}…`,
-                }
-              : s,
-          )
-        },
-        ac.signal,
-        8,
-      )
+      const [{ ok, failed }, premiums] = await Promise.all([
+        fetchSmartMoneyOverviews(
+          symbols,
+          (done, total) => {
+            setSmOverviewValueScan((s) =>
+              s?.phase === 'loading'
+                ? {
+                    ...s,
+                    progress: `逐合约拉取聪明钱总览快照 ${done}/${total}…`,
+                  }
+                : s,
+            )
+          },
+          ac.signal,
+          8,
+        ),
+        fetchPremiumIndexAll(ac.signal).catch(() => []),
+      ])
       if (ac.signal.aborted) return
+      const markBySymbol: Record<string, number> = {}
+      for (const p of premiums) {
+        const mark = parseFloat(p.markPrice)
+        if (p.symbol && Number.isFinite(mark) && mark > 0) {
+          markBySymbol[p.symbol.toUpperCase()] = mark
+        }
+      }
       const snapshot = buildSmOverviewValueSnapshot(
         ok,
         symbols.length,
         failed.length,
+        Date.now(),
+        markBySymbol,
       )
       setSmOverviewValueScan({
         phase: 'done',

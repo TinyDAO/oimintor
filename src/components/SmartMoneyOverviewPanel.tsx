@@ -51,23 +51,33 @@ function SubsetMeter({
   fmt,
   tone,
   unit,
+  scaleMax,
 }: {
   all: number
   whale: number
   fmt: (n: number) => string
   tone: 'long' | 'short'
   unit?: string
+  /** 与对侧共用最大值，轨道长度按总额比例，不再各自拉满 */
+  scaleMax?: number
 }) {
   const share = all > 0 ? Math.min(100, (Math.max(0, whale) / all) * 100) : 0
+  const trackPct =
+    scaleMax != null && scaleMax > 0
+      ? Math.min(100, (Math.max(0, all) / scaleMax) * 100)
+      : 100
   return (
     <div className={`sm-ov-subset sm-ov-subset-${tone}`}>
-      <div className="sm-ov-subset-track" aria-hidden>
-        <div className="sm-ov-subset-whale" style={{ width: `${share}%` }} />
+      <div className="sm-ov-subset-scale" style={{ width: `${Math.max(trackPct, all > 0 ? 4 : 0)}%` }}>
+        <div className="sm-ov-subset-track" aria-hidden>
+          <div className="sm-ov-subset-whale" style={{ width: `${share}%` }} />
+        </div>
       </div>
       <div className="sm-ov-subset-labs">
         <span>
-          全体 {fmt(all)}
+          {tone === 'long' ? '多' : '空'}全体 {fmt(all)}
           {unit ? ` ${unit}` : ''}
+          {scaleMax != null && scaleMax > 0 ? ` · 占较大侧 ${pct(all, scaleMax)}` : ''}
         </span>
         <span>
           其中大户 {fmt(whale)} · {pct(whale, all)}
@@ -176,9 +186,15 @@ type Seg = { key: string; label: string; value: number; cls: string }
 
 function ShareStack({ segs, unit }: { segs: Seg[]; unit?: string }) {
   const sum = segs.reduce((a, s) => a + Math.max(0, s.value), 0)
+  const long = segs.find((s) => s.key === 'l')
+  const short = segs.find((s) => s.key === 's')
+  const ratio =
+    long && short && short.value > 0 && Number.isFinite(long.value / short.value)
+      ? long.value / short.value
+      : undefined
   return (
     <div className="sm-ov-stack">
-      <div className="sm-ov-stack-bar">
+      <div className="sm-ov-stack-bar" role="img" aria-label="多空总额比例">
         {segs.map((s) => {
           const w = sum > 0 ? (Math.max(0, s.value) / sum) * 100 : 0
           if (w <= 0) return null
@@ -187,11 +203,15 @@ function ShareStack({ segs, unit }: { segs: Seg[]; unit?: string }) {
               key={s.key}
               className={`sm-ov-stack-seg ${s.cls}`}
               style={{ width: `${w}%` }}
-              title={`${s.label} ${unit === 'usd' ? fmtUsd(s.value) : fmtQty(s.value)}`}
+              title={`${s.label} ${unit === 'usd' ? fmtUsd(s.value) : fmtQty(s.value)} · ${w.toFixed(0)}%`}
             />
           )
         })}
       </div>
+      <p className="sm-ov-stack-ratio mono">
+        {ratio != null ? `多/空 ${ratio.toFixed(3)}∶1` : '—'}
+        {sum > 0 ? ` · 合计 ${unit === 'usd' ? fmtUsd(sum) : fmtQty(sum)}` : ''}
+      </p>
       <ul className="sm-ov-legend">
         {segs.map((s) => (
           <li key={s.key}>
@@ -276,6 +296,12 @@ export function SmartMoneyOverviewPanel({
 
   const qtyLongAll = overviewSideQty(data, 'long', 'trader')
   const qtyShortAll = overviewSideQty(data, 'short', 'trader')
+  const costLongAll = overviewSideNotionalByBucket(data, 'long', 'trader')
+  const costShortAll = overviewSideNotionalByBucket(data, 'short', 'trader')
+  const costLongWhale = overviewSideNotionalByBucket(data, 'long', 'whale')
+  const costShortWhale = overviewSideNotionalByBucket(data, 'short', 'whale')
+  const costScaleMax = Math.max(costLongAll, costShortAll)
+  const qtyScaleMax = Math.max(qtyLongAll, qtyShortAll)
   const qtyRatio =
     qtyShortAll > 0 && Number.isFinite(qtyLongAll / qtyShortAll)
       ? qtyLongAll / qtyShortAll
@@ -285,13 +311,13 @@ export function SmartMoneyOverviewPanel({
     {
       key: 'l',
       label: '多头',
-      value: overviewSideNotionalByBucket(data, 'long', 'trader'),
+      value: costLongAll,
       cls: 'seg-long-trader',
     },
     {
       key: 's',
       label: '空头',
-      value: overviewSideNotionalByBucket(data, 'short', 'trader'),
+      value: costShortAll,
       cls: 'seg-short-trader',
     },
   ]
@@ -388,33 +414,37 @@ export function SmartMoneyOverviewPanel({
         </div>
         <h5>全体多空 · 成本名义</h5>
         <ShareStack segs={costSegs} unit="usd" />
-        <h5>大户占全体 · 成本</h5>
+        <h5>大户占全体 · 成本（轨道按多空总额同一尺度）</h5>
         <SubsetMeter
-          all={overviewSideNotionalByBucket(data, 'long', 'trader')}
-          whale={overviewSideNotionalByBucket(data, 'long', 'whale')}
+          all={costLongAll}
+          whale={costLongWhale}
           fmt={fmtUsd}
           tone="long"
+          scaleMax={costScaleMax}
         />
         <SubsetMeter
-          all={overviewSideNotionalByBucket(data, 'short', 'trader')}
-          whale={overviewSideNotionalByBucket(data, 'short', 'whale')}
+          all={costShortAll}
+          whale={costShortWhale}
           fmt={fmtUsd}
           tone="short"
+          scaleMax={costScaleMax}
         />
         <h5>全体多空 · 持仓数量（{base}）</h5>
         <ShareStack segs={qtySegs} />
-        <h5>大户占全体 · 数量</h5>
+        <h5>大户占全体 · 数量（轨道按多空总额同一尺度）</h5>
         <SubsetMeter
           all={qtyLongAll}
           whale={overviewSideQty(data, 'long', 'whale')}
           fmt={fmtQty}
           tone="long"
+          scaleMax={qtyScaleMax}
         />
         <SubsetMeter
           all={qtyShortAll}
           whale={overviewSideQty(data, 'short', 'whale')}
           fmt={fmtQty}
           tone="short"
+          scaleMax={qtyScaleMax}
         />
         {markOk ? (
           <PriceTiles longAvg={longAvg} shortAvg={shortAvg} mark={mark} base={base} />
