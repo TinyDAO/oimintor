@@ -40,51 +40,9 @@ const BUCKET_TABS: { id: Exclude<OverviewBucket, 'all'>; label: string }[] = [
   { id: 'whale', label: '其中大户' },
 ]
 
-function pct(part: number, whole: number): string {
+function sidePct(part: number, whole: number): string {
   if (!(whole > 0)) return '—'
-  return `${Math.min(100, (part / whole) * 100).toFixed(0)}%`
-}
-
-function SubsetMeter({
-  all,
-  whale,
-  fmt,
-  tone,
-  unit,
-  scaleMax,
-}: {
-  all: number
-  whale: number
-  fmt: (n: number) => string
-  tone: 'long' | 'short'
-  unit?: string
-  /** 与对侧共用最大值，轨道长度按总额比例，不再各自拉满 */
-  scaleMax?: number
-}) {
-  const share = all > 0 ? Math.min(100, (Math.max(0, whale) / all) * 100) : 0
-  const trackPct =
-    scaleMax != null && scaleMax > 0
-      ? Math.min(100, (Math.max(0, all) / scaleMax) * 100)
-      : 100
-  return (
-    <div className={`sm-ov-subset sm-ov-subset-${tone}`}>
-      <div className="sm-ov-subset-scale" style={{ width: `${Math.max(trackPct, all > 0 ? 4 : 0)}%` }}>
-        <div className="sm-ov-subset-track" aria-hidden>
-          <div className="sm-ov-subset-whale" style={{ width: `${share}%` }} />
-        </div>
-      </div>
-      <div className="sm-ov-subset-labs">
-        <span>
-          {tone === 'long' ? '多' : '空'}全体 {fmt(all)}
-          {unit ? ` ${unit}` : ''}
-          {scaleMax != null && scaleMax > 0 ? ` · 占较大侧 ${pct(all, scaleMax)}` : ''}
-        </span>
-        <span>
-          其中大户 {fmt(whale)} · {pct(whale, all)}
-        </span>
-      </div>
-    </div>
-  )
+  return `${Math.min(100, (Math.max(0, part) / whole) * 100).toFixed(0)}%`
 }
 
 function IconPos() {
@@ -182,47 +140,81 @@ function PriceTiles({
   )
 }
 
-type Seg = { key: string; label: string; value: number; cls: string }
-
-function ShareStack({ segs, unit }: { segs: Seg[]; unit?: string }) {
-  const sum = segs.reduce((a, s) => a + Math.max(0, s.value), 0)
-  const long = segs.find((s) => s.key === 'l')
-  const short = segs.find((s) => s.key === 's')
-  const ratio =
-    long && short && short.value > 0 && Number.isFinite(long.value / short.value)
-      ? long.value / short.value
-      : undefined
+function NestedLsBar({
+  longAll,
+  longWhale,
+  shortAll,
+  shortWhale,
+  unit,
+}: {
+  longAll: number
+  longWhale: number
+  shortAll: number
+  shortWhale: number
+  unit?: 'usd'
+}) {
+  const long = Math.max(0, longAll)
+  const short = Math.max(0, shortAll)
+  const whaleL = Math.max(0, longWhale)
+  const whaleS = Math.max(0, shortWhale)
+  const sum = long + short
+  const longW = sum > 0 ? (long / sum) * 100 : 0
+  const shortW = sum > 0 ? (short / sum) * 100 : 0
+  const whaleLShare = long > 0 ? Math.min(100, (whaleL / long) * 100) : 0
+  const whaleSShare = short > 0 ? Math.min(100, (whaleS / short) * 100) : 0
+  const ratio = short > 0 && Number.isFinite(long / short) ? long / short : undefined
+  const fmt = unit === 'usd' ? fmtUsd : fmtQty
   return (
     <div className="sm-ov-stack">
-      <div className="sm-ov-stack-bar" role="img" aria-label="多空总额比例">
-        {segs.map((s) => {
-          const w = sum > 0 ? (Math.max(0, s.value) / sum) * 100 : 0
-          if (w <= 0) return null
-          return (
-            <div
-              key={s.key}
-              className={`sm-ov-stack-seg ${s.cls}`}
-              style={{ width: `${w}%` }}
-              title={`${s.label} ${unit === 'usd' ? fmtUsd(s.value) : fmtQty(s.value)} · ${w.toFixed(0)}%`}
-            />
-          )
-        })}
+      <div className="sm-ov-nest-bar" role="img" aria-label="多空总额，其中深色为大户">
+        {longW > 0 ? (
+          <div
+            className="sm-ov-nest-long"
+            style={{ width: `${longW}%` }}
+            title={`多头全体 ${fmt(long)} · ${sidePct(long, sum)}；其中大户 ${fmt(whaleL)} · 占本侧 ${sidePct(whaleL, long)}`}
+          >
+            <div className="sm-ov-nest-whale-l" style={{ width: `${whaleLShare}%` }} />
+          </div>
+        ) : null}
+        {shortW > 0 ? (
+          <div
+            className="sm-ov-nest-short"
+            style={{ width: `${shortW}%` }}
+            title={`空头全体 ${fmt(short)} · ${sidePct(short, sum)}；其中大户 ${fmt(whaleS)} · 占本侧 ${sidePct(whaleS, short)}`}
+          >
+            <div className="sm-ov-nest-whale-s" style={{ width: `${whaleSShare}%` }} />
+          </div>
+        ) : null}
       </div>
       <p className="sm-ov-stack-ratio mono">
         {ratio != null ? `多/空 ${ratio.toFixed(3)}∶1` : '—'}
-        {sum > 0 ? ` · 合计 ${unit === 'usd' ? fmtUsd(sum) : fmtQty(sum)}` : ''}
+        {sum > 0 ? ` · 合计 ${fmt(sum)}` : ''}
       </p>
       <ul className="sm-ov-legend">
-        {segs.map((s) => (
-          <li key={s.key}>
-            <i className={s.cls} />
-            <span>{s.label}</span>
-            <b className="mono">
-              {unit === 'usd' ? fmtUsd(s.value) : fmtQty(s.value)}
-            </b>
-            <em>{sum > 0 ? `${((Math.max(0, s.value) / sum) * 100).toFixed(0)}%` : '—'}</em>
-          </li>
-        ))}
+        <li>
+          <i className="seg-long-trader" />
+          <span>多头全体</span>
+          <b className="mono">{fmt(long)}</b>
+          <em>{sidePct(long, sum)}</em>
+        </li>
+        <li>
+          <i className="seg-short-trader" />
+          <span>空头全体</span>
+          <b className="mono">{fmt(short)}</b>
+          <em>{sidePct(short, sum)}</em>
+        </li>
+        <li>
+          <i className="seg-long-whale" />
+          <span>多·大户</span>
+          <b className="mono">{fmt(whaleL)}</b>
+          <em>{sidePct(whaleL, long)}</em>
+        </li>
+        <li>
+          <i className="seg-short-whale" />
+          <span>空·大户</span>
+          <b className="mono">{fmt(whaleS)}</b>
+          <em>{sidePct(whaleS, short)}</em>
+        </li>
       </ul>
     </div>
   )
@@ -300,31 +292,12 @@ export function SmartMoneyOverviewPanel({
   const costShortAll = overviewSideNotionalByBucket(data, 'short', 'trader')
   const costLongWhale = overviewSideNotionalByBucket(data, 'long', 'whale')
   const costShortWhale = overviewSideNotionalByBucket(data, 'short', 'whale')
-  const costScaleMax = Math.max(costLongAll, costShortAll)
-  const qtyScaleMax = Math.max(qtyLongAll, qtyShortAll)
+  const qtyLongWhale = overviewSideQty(data, 'long', 'whale')
+  const qtyShortWhale = overviewSideQty(data, 'short', 'whale')
   const qtyRatio =
     qtyShortAll > 0 && Number.isFinite(qtyLongAll / qtyShortAll)
       ? qtyLongAll / qtyShortAll
       : undefined
-
-  const costSegs: Seg[] = [
-    {
-      key: 'l',
-      label: '多头',
-      value: costLongAll,
-      cls: 'seg-long-trader',
-    },
-    {
-      key: 's',
-      label: '空头',
-      value: costShortAll,
-      cls: 'seg-short-trader',
-    },
-  ]
-  const qtySegs: Seg[] = [
-    { key: 'l', label: '多头', value: qtyLongAll, cls: 'seg-long-trader' },
-    { key: 's', label: '空头', value: qtyShortAll, cls: 'seg-short-trader' },
-  ]
 
   const uplRows = [
     {
@@ -412,39 +385,20 @@ export function SmartMoneyOverviewPanel({
             </small>
           </div>
         </div>
-        <h5>全体多空 · 成本名义</h5>
-        <ShareStack segs={costSegs} unit="usd" />
-        <h5>大户占全体 · 成本（轨道按多空总额同一尺度）</h5>
-        <SubsetMeter
-          all={costLongAll}
-          whale={costLongWhale}
-          fmt={fmtUsd}
-          tone="long"
-          scaleMax={costScaleMax}
+        <h5>全体多空 · 成本名义（深绿/深红 = 大户）</h5>
+        <NestedLsBar
+          longAll={costLongAll}
+          longWhale={costLongWhale}
+          shortAll={costShortAll}
+          shortWhale={costShortWhale}
+          unit="usd"
         />
-        <SubsetMeter
-          all={costShortAll}
-          whale={costShortWhale}
-          fmt={fmtUsd}
-          tone="short"
-          scaleMax={costScaleMax}
-        />
-        <h5>全体多空 · 持仓数量（{base}）</h5>
-        <ShareStack segs={qtySegs} />
-        <h5>大户占全体 · 数量（轨道按多空总额同一尺度）</h5>
-        <SubsetMeter
-          all={qtyLongAll}
-          whale={overviewSideQty(data, 'long', 'whale')}
-          fmt={fmtQty}
-          tone="long"
-          scaleMax={qtyScaleMax}
-        />
-        <SubsetMeter
-          all={qtyShortAll}
-          whale={overviewSideQty(data, 'short', 'whale')}
-          fmt={fmtQty}
-          tone="short"
-          scaleMax={qtyScaleMax}
+        <h5>全体多空 · 持仓数量（{base}，深绿/深红 = 大户）</h5>
+        <NestedLsBar
+          longAll={qtyLongAll}
+          longWhale={qtyLongWhale}
+          shortAll={qtyShortAll}
+          shortWhale={qtyShortWhale}
         />
         {markOk ? (
           <PriceTiles longAvg={longAvg} shortAvg={shortAvg} mark={mark} base={base} />
