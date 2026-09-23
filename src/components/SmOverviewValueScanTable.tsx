@@ -17,6 +17,7 @@ import {
   formatStructureUplPct,
   formatStructureUsd,
   groupSmStructure,
+  smStructureFlagLabels,
   smStructureMeta,
   smStructureReps,
   smStructureStrength,
@@ -295,13 +296,25 @@ function StructureBoard({
                 const r = hit.row
                 const ls = hit.lsRatio ?? smOverviewLongShortRatio(r)
                 const strengthUsd = smStructureStrength(r)
+                const stacked = hit.flags.length >= 2
                 return (
                   <li
                     key={`${r.side}-${r.symbol}`}
-                    className={onOpenDetail ? 'is-click' : undefined}
+                    className={[
+                      onOpenDetail ? 'is-click' : '',
+                      stacked ? 'is-multi' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    title={stacked ? `同时满足 ${smStructureFlagLabels(hit.flags, side)}` : undefined}
                     onClick={onOpenDetail ? () => onOpenDetail(r.symbol) : undefined}
                   >
-                    <span className="sym">{r.symbol.replace(/USDT$/i, '')}</span>
+                    <span className="sym">
+                      {r.symbol.replace(/USDT$/i, '')}
+                      {stacked ? (
+                        <span className="sm-scan-multi-badge">叠{hit.flags.length}</span>
+                      ) : null}
+                    </span>
                     <span
                       className={`mono num ${
                         ls != null && ls > 1

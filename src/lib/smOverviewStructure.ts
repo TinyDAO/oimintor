@@ -13,12 +13,16 @@ export type SmStructureKind =
   | 'fresh'
   | 'other'
 
+export type SmStructureFlag = Exclude<SmStructureKind, 'core' | 'other'>
+
 export type SmStructureHit = {
   row: SmOverviewValueScanRow
   kind: SmStructureKind
   why: string
   lsRatio?: number
   uplPct?: number
+  /** 可同时成立的规则；≥2 时列表高亮。核心趋势是兜底，不计入重叠 */
+  flags: SmStructureFlag[]
 }
 
 export type SmStructureBucket = {
@@ -188,12 +192,27 @@ export function classifySmStructureRow(
       (bias >= CROWDED_RICH_BIAS &&
         uplPct != null &&
         uplPct >= CROWDED_RICH_UPL))
+  const strong =
+    dominant &&
+    strongPct &&
+    (bias ?? 0) >= STRONG_BIAS &&
+    (largeIn || inflow)
+  const decay = dominant && (decayByPct || largeOut)
+  const fresh = dominant && row.isNew
+  const watch = dominant && ((outflow && !largeOut) || softRed)
+  const flags: SmStructureFlag[] = []
+  if (decay) flags.push('decay')
+  if (fresh) flags.push('fresh')
+  if (watch) flags.push('watch')
+  if (crowded) flags.push('crowded')
+  if (strong) flags.push('strong')
 
   const hit = (kind: SmStructureKind, base: string): Omit<SmStructureHit, 'row'> => ({
     kind,
     why: metricWhy(base, lsRatio, uplPct, strengthUsd),
     lsRatio,
     uplPct,
+    flags,
   })
 
   if (!dominant) {
@@ -220,7 +239,7 @@ export function classifySmStructureRow(
   if (crowded) {
     return hit('crowded', '聪明钱一侧堆得够大，拥挤')
   }
-  if (strongPct && (bias ?? 0) >= STRONG_BIAS && (largeIn || inflow)) {
+  if (strong) {
     return hit('strong', '多空比 ≥ 4 且浮盈 ≥ +20%，聪明钱加仓')
   }
   if (healthyPct || (uplPct == null && !outflow)) {
@@ -249,6 +268,13 @@ export function groupSmStructure(
     kind,
     items: hits.filter((h) => h.kind === kind),
   })).filter((b) => b.kind !== 'other' || b.items.length > 0)
+}
+
+export function smStructureFlagLabels(
+  flags: SmStructureFlag[],
+  side: SmOverviewValueSide,
+): string {
+  return flags.map((k) => smStructureMeta(k, side).label).join(' · ')
 }
 
 export function smStructureReps(items: SmStructureHit[], n = 3): string {
