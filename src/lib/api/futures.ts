@@ -2,12 +2,58 @@ import { fapi } from './paths.js'
 
 const UA_FUTURES = 'binance-derivatives-trading-usds-futures/1.1.0 (Skill)'
 
+/** 币安用 HTTP 418 + code -1003 表示 IP 被临时封禁，不是路由错误。 */
+export class BinanceRequestError extends Error {
+  readonly banUntilMs: number | null
+
+  constructor(message: string, banUntilMs: number | null) {
+    super(message)
+    this.name = 'BinanceRequestError'
+    this.banUntilMs = banUntilMs
+  }
+}
+
+function banUntilFrom(body: string, retryAfter: string | null): number | null {
+  const match = body.match(/until (\d{13})/)
+  if (match) {
+    const until = Number(match[1])
+    if (Number.isFinite(until)) return until
+  }
+  const seconds = retryAfter ? Number(retryAfter) : NaN
+  if (Number.isFinite(seconds) && seconds > 0) return Date.now() + seconds * 1000
+  return null
+}
+
+function banMessage(untilMs: number): string {
+  const minutes = Math.max(1, Math.ceil((untilMs - Date.now()) / 60000))
+  const clock = new Date(untilMs).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `币安合约接口限流：当前 IP 请求过多，大约 ${minutes} 分钟后（${clock}）恢复。在此之前刷新或重新扫描会把封禁延长。`
+}
+
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const r = await fetch(url, {
     headers: { 'User-Agent': UA_FUTURES },
     signal,
   })
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} ${url}`)
+  if (!r.ok) {
+    const body = await r.text().catch(() => '')
+    const banUntilMs = banUntilFrom(body, r.headers.get('retry-after'))
+    if (banUntilMs) throw new BinanceRequestError(banMessage(banUntilMs), banUntilMs)
+    let detail = ''
+    try {
+      const parsed = JSON.parse(body) as { msg?: string }
+      if (parsed.msg) detail = parsed.msg
+    } catch {
+      detail = ''
+    }
+    throw new BinanceRequestError(
+      detail ? `${r.status} ${detail}` : `${r.status} ${r.statusText} ${url}`,
+      null,
+    )
+  }
   return r.json() as Promise<T>
 }
 
@@ -123,6 +169,8 @@ export type KlineCandle = {
   close: number
   /** 成交数量（标的基币，Binance kline 第 6 字段） */
   volume: number
+  /** 成交额（计价币，USDT 永续为 USDT，Binance kline 第 8 字段） */
+  quoteVolume: number
 }
 
 type RawKline = [
@@ -177,6 +225,7 @@ export async function fetchKlines(
     low: parseFloat(k[3]),
     close: parseFloat(k[4]),
     volume: parseFloat(k[5]),
+    quoteVolume: parseFloat(k[7]),
   }))
 }
 

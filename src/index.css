@@ -670,6 +670,18 @@ body::before {
   height: 54px;
 }
 
+.alpha-futures-table {
+  min-width: 1180px;
+}
+
+.alpha-futures-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
 .daily-volume-legend {
   max-width: 90ch;
 }
@@ -720,7 +732,8 @@ body::before {
 }
 
 .drawer {
-  width: min(1040px, 100vw);
+  position: relative;
+  width: min(var(--drawer-w, 1440px), 100vw);
   max-width: 100%;
   background: var(--panel);
   border-left: 1px solid var(--border);
@@ -728,6 +741,39 @@ body::before {
   overflow-y: auto;
   animation: slide 0.28s ease;
   box-shadow: -20px 0 60px rgba(0, 0, 0, 0.45);
+}
+
+.drawer-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  width: 14px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.drawer-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 3px;
+  height: 48px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.drawer-resize-handle:hover::before,
+body.drawer-resizing .drawer-resize-handle::before {
+  background: var(--accent);
+}
+
+body.drawer-resizing {
+  cursor: ew-resize;
+  user-select: none;
 }
 
 @keyframes slide {
@@ -1551,6 +1597,31 @@ body::before {
 
 .sm-overview-value-table tbody tr.sm-scan-inverted:hover {
   background: rgba(251, 113, 133, 0.16);
+}
+
+.sm-struct-bucket li.is-multi {
+  background: color-mix(in srgb, #fbbf24 16%, transparent);
+  box-shadow: inset 3px 0 0 #fbbf24;
+}
+
+.sm-struct-bucket li.is-multi.is-click:hover {
+  background: color-mix(in srgb, #fbbf24 24%, transparent);
+}
+
+.sm-scan-multi-badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 0.28rem;
+  padding: 0.06rem 0.32rem;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.7);
+  background: rgba(251, 191, 36, 0.22);
+  color: #fde68a;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .sm-scan-new-badge {

@@ -19,7 +19,13 @@ function compactVolume(value: number): string {
   return value.toFixed(2)
 }
 
-function DailyVolumeSparkInner({ candles }: { candles: KlineCandle[] }) {
+function DailyVolumeSparkInner({
+  candles,
+  metricLabel = '成交币量',
+}: {
+  candles: Pick<KlineCandle, 'openTime' | 'volume'>[]
+  metricLabel?: string
+}) {
   const data = useMemo(
     () =>
       candles.map((c, index) => ({
@@ -46,7 +52,7 @@ function DailyVolumeSparkInner({ candles }: { candles: KlineCandle[] }) {
             contentStyle={{ fontSize: 11 }}
             formatter={(value) => [
               compactVolume(typeof value === 'number' ? value : Number(value)),
-              '成交币量',
+              metricLabel,
             ]}
             labelFormatter={(value) =>
               new Date(Number(value)).toLocaleDateString('zh-CN', {

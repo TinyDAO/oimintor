@@ -15,7 +15,11 @@ import {
   type SmartMoneyFuturesRow,
   type SmartMoneyTimeRange,
 } from './lib/api/smartMoneyFutures'
-import { fetchExchangeInfo, fetchPremiumIndexAll } from './lib/api/futures'
+import {
+  BinanceRequestError,
+  fetchExchangeInfo,
+  fetchPremiumIndexAll,
+} from './lib/api/futures'
 import { perpetualUsdtSymbols } from './lib/binance/universe'
 import {
   findOiCrossesAboveThreshold,
@@ -65,6 +69,13 @@ import {
   scanDailyVolumeSurges,
   type DailyVolumeScanUiState,
 } from './lib/dailyVolumeScan'
+import {
+  ALPHA_FUTURES_SCAN_TITLE,
+  readTodayAlphaFuturesScan,
+  saveAlphaFuturesScan,
+  scanAlphaFutures,
+  type AlphaFuturesScanUiState,
+} from './lib/alphaFuturesScan'
 
 function labelSmRange(r: SmartMoneyTimeRange): string {
   switch (r) {
@@ -169,12 +180,15 @@ export default function App() {
     useState<RetailWhaleDivergenceScanUiState | null>(null)
   const [dailyVolumeScan, setDailyVolumeScan] =
     useState<DailyVolumeScanUiState | null>(null)
+  const [alphaFuturesScan, setAlphaFuturesScan] =
+    useState<AlphaFuturesScanUiState | null>(null)
   const scanAbortRef = useRef<AbortController | null>(null)
   const smScanAbortRef = useRef<AbortController | null>(null)
   const smNotionalScanAbortRef = useRef<AbortController | null>(null)
   const smOverviewValueScanAbortRef = useRef<AbortController | null>(null)
   const retailWhaleScanAbortRef = useRef<AbortController | null>(null)
   const dailyVolumeScanAbortRef = useRef<AbortController | null>(null)
+  const alphaFuturesScanAbortRef = useRef<AbortController | null>(null)
   const smDetailAbortRef = useRef<AbortController | null>(null)
 
   /** 上一轮 OI 榜快照（用于检测 24h OI% 是否从下穿阈值变为上穿阈值，见 oiCrossAlert） */
@@ -200,6 +214,7 @@ export default function App() {
   const loadOi = useCallback(async () => {
     setOiLoading(true)
     setOiErr(null)
+    let banUntilMs: number | null = null
     try {
       const { insights: ins } = await loadMarketInsights(setProgress, topN)
       const prevMap = prevOiPctSnapshotRef.current
@@ -225,10 +240,17 @@ export default function App() {
       }
     } catch (e) {
       setOiErr(e instanceof Error ? e.message : String(e))
+      if (e instanceof BinanceRequestError && e.banUntilMs && e.banUntilMs > Date.now()) {
+        banUntilMs = e.banUntilMs
+      }
     } finally {
       setOiLoading(false)
       setProgress('')
-      scheduleNext()
+      if (autoRefreshRef.current && banUntilMs) {
+        setNextDeadline(banUntilMs + 5000)
+      } else {
+        scheduleNext()
+      }
     }
   }, [topN, scheduleNext])
 
@@ -243,6 +265,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     const ac = new AbortController()
     scanAbortRef.current = ac
     const depth = topN
@@ -252,6 +276,7 @@ export default function App() {
     setSmOverviewValueScan(null)
     setRetailWhaleScan(null)
     setDailyVolumeScan(null)
+    setAlphaFuturesScan(null)
     setVariantScan({
       phase: 'loading',
       progress: `V4A/V7/V8 聚合扫描（Top ${depth}）…`,
@@ -336,6 +361,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     const ac = new AbortController()
     smScanAbortRef.current = ac
     setSelected(null)
@@ -344,6 +371,7 @@ export default function App() {
     setSmOverviewValueScan(null)
     setRetailWhaleScan(null)
     setDailyVolumeScan(null)
+    setAlphaFuturesScan(null)
     setSmDirectionScan({ phase: 'loading', progress: '拉取 24h 与 1h 聪明钱列表…' })
     try {
       const [rows24h, rows1h] = await Promise.all([
@@ -381,6 +409,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     smNotionalScanAbortRef.current?.abort()
     const ac = new AbortController()
     smNotionalScanAbortRef.current = ac
@@ -390,6 +420,7 @@ export default function App() {
     setSmOverviewValueScan(null)
     setRetailWhaleScan(null)
     setDailyVolumeScan(null)
+    setAlphaFuturesScan(null)
     const tr = smRange
     setSmNotionalScan({
       phase: 'loading',
@@ -467,6 +498,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     smOverviewValueScanAbortRef.current?.abort()
     const ac = new AbortController()
     smOverviewValueScanAbortRef.current = ac
@@ -476,6 +509,7 @@ export default function App() {
     setSmNotionalScan(null)
     setRetailWhaleScan(null)
     setDailyVolumeScan(null)
+    setAlphaFuturesScan(null)
     setSmOverviewValueScan({
       phase: 'loading',
       progress: '加载 Binance USDT-M 永续合约列表…',
@@ -548,6 +582,8 @@ export default function App() {
     smOverviewValueScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     retailWhaleScanAbortRef.current?.abort()
     const ac = new AbortController()
     retailWhaleScanAbortRef.current = ac
@@ -557,6 +593,7 @@ export default function App() {
     setSmNotionalScan(null)
     setSmOverviewValueScan(null)
     setDailyVolumeScan(null)
+    setAlphaFuturesScan(null)
     setRetailWhaleScan({
       phase: 'loading',
       progress: '准备扫描全部 USDT-M 永续合约多空比…',
@@ -600,6 +637,8 @@ export default function App() {
     retailWhaleScanAbortRef.current?.abort()
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     const ac = new AbortController()
     dailyVolumeScanAbortRef.current = ac
     setSelected(null)
@@ -608,6 +647,7 @@ export default function App() {
     setSmNotionalScan(null)
     setSmOverviewValueScan(null)
     setRetailWhaleScan(null)
+    setAlphaFuturesScan(null)
     setDailyVolumeScan({
       phase: 'loading',
       progress: '准备扫描全部 USDT-M 永续合约日线成交量…',
@@ -660,18 +700,112 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     setSelected(null)
     setVariantScan(null)
     setSmDirectionScan(null)
     setSmNotionalScan(null)
     setSmOverviewValueScan(null)
     setRetailWhaleScan(null)
+    setAlphaFuturesScan(null)
     setDailyVolumeScan({
       phase: 'done',
       ...cached,
       fromCache: true,
     })
   }, [runDailyVolumeScan])
+
+  const runAlphaFuturesScan = useCallback(async () => {
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    const ac = new AbortController()
+    alphaFuturesScanAbortRef.current = ac
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
+    setAlphaFuturesScan({
+      phase: 'loading',
+      progress: '准备扫描已上 Alpha 且有 USDT 永续的合约…',
+    })
+    try {
+      const result = await scanAlphaFutures(
+        (progress) => {
+          setAlphaFuturesScan((state) =>
+            state?.phase === 'loading' ? { ...state, progress } : state,
+          )
+        },
+        ac.signal,
+      )
+      if (ac.signal.aborted) return
+      const snapshot = saveAlphaFuturesScan(result)
+      setAlphaFuturesScan({
+        phase: 'done',
+        ...snapshot,
+        fromCache: false,
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      setAlphaFuturesScan({
+        phase: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      if (alphaFuturesScanAbortRef.current === ac) {
+        alphaFuturesScanAbortRef.current = null
+      }
+    }
+  }, [])
+
+  const openAlphaFuturesScanDrawer = useCallback(() => {
+    const cached = readTodayAlphaFuturesScan()
+    if (!cached) {
+      void runAlphaFuturesScan()
+      return
+    }
+
+    scanAbortRef.current?.abort()
+    scanAbortRef.current = null
+    smScanAbortRef.current?.abort()
+    smScanAbortRef.current = null
+    smNotionalScanAbortRef.current?.abort()
+    smNotionalScanAbortRef.current = null
+    smOverviewValueScanAbortRef.current?.abort()
+    smOverviewValueScanAbortRef.current = null
+    retailWhaleScanAbortRef.current?.abort()
+    retailWhaleScanAbortRef.current = null
+    dailyVolumeScanAbortRef.current?.abort()
+    dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
+    setSelected(null)
+    setVariantScan(null)
+    setSmDirectionScan(null)
+    setSmNotionalScan(null)
+    setSmOverviewValueScan(null)
+    setRetailWhaleScan(null)
+    setDailyVolumeScan(null)
+    setAlphaFuturesScan({
+      phase: 'done',
+      ...cached,
+      fromCache: true,
+    })
+  }, [runAlphaFuturesScan])
 
   const openSmDirectionScanDrawer = useCallback(() => {
     void runSmDirectionScan()
@@ -694,6 +828,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
 
     const cached = readTodaySmOverviewValueScanCache()
     if (cached) {
@@ -703,6 +839,7 @@ export default function App() {
       setSmNotionalScan(null)
       setRetailWhaleScan(null)
       setDailyVolumeScan(null)
+      setAlphaFuturesScan(null)
       setSmOverviewValueScan({
         phase: 'done',
         result: cached,
@@ -724,6 +861,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     const depth = topN
     const cached = readVariantScanCacheIfValid(depth)
     if (cached) {
@@ -733,6 +872,7 @@ export default function App() {
       setSmOverviewValueScan(null)
       setRetailWhaleScan(null)
       setDailyVolumeScan(null)
+      setAlphaFuturesScan(null)
       setVariantScan({
         phase: 'done',
         progress: '',
@@ -763,6 +903,8 @@ export default function App() {
     retailWhaleScanAbortRef.current = null
     dailyVolumeScanAbortRef.current?.abort()
     dailyVolumeScanAbortRef.current = null
+    alphaFuturesScanAbortRef.current?.abort()
+    alphaFuturesScanAbortRef.current = null
     smDetailAbortRef.current?.abort()
     smDetailAbortRef.current = null
     setSelected(null)
@@ -774,6 +916,7 @@ export default function App() {
     setSmOverviewValueScan(null)
     setRetailWhaleScan(null)
     setDailyVolumeScan(null)
+    setAlphaFuturesScan(null)
   }
 
   /** 仅关闭合约详情 / 加载中 / 错误层；保留 V4/V7/V8 扫描抽屉 */
@@ -805,6 +948,7 @@ export default function App() {
       setSmOverviewValueScan(null)
       setRetailWhaleScan(null)
       setDailyVolumeScan(null)
+      setAlphaFuturesScan(null)
     }
     setDetailPendingSymbol(symbol)
     void loadSymbolInsight(symbol, ac.signal)
@@ -885,6 +1029,15 @@ export default function App() {
     const sec = Math.max(0, Math.ceil((nextDeadline - Date.now()) / 1000))
     return `约 ${formatCountdown(sec)} 后自动刷新`
   }, [autoRefresh, nextDeadline, panel, oiLoading, smLoading, tick])
+
+  const scanBusy =
+    variantScan?.phase === 'loading' ||
+    smDirectionScan?.phase === 'loading' ||
+    smNotionalScan?.phase === 'loading' ||
+    smOverviewValueScan?.phase === 'loading' ||
+    retailWhaleScan?.phase === 'loading' ||
+    dailyVolumeScan?.phase === 'loading' ||
+    alphaFuturesScan?.phase === 'loading'
 
   const tableRows = useMemo(() => {
     let rows = alphaOnly ? insights.filter((x) => x.isAlpha) : insights
@@ -1049,14 +1202,7 @@ export default function App() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={
-                    oiLoading ||
-                    variantScan?.phase === 'loading' ||
-                    smNotionalScan?.phase === 'loading' ||
-                    smOverviewValueScan?.phase === 'loading' ||
-                    retailWhaleScan?.phase === 'loading' ||
-                    dailyVolumeScan?.phase === 'loading'
-                  }
+                  disabled={oiLoading || scanBusy}
                   onClick={() => void openVariantScanDrawer()}
                   title={`按当前榜单深度 Top ${topN} 打开扫描；若有 24h 内缓存则直接展示，否则拉榜并校验 V4A/V7/V8`}
                 >
@@ -1065,14 +1211,7 @@ export default function App() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={
-                    oiLoading ||
-                    smNotionalScan?.phase === 'loading' ||
-                    smOverviewValueScan?.phase === 'loading' ||
-                    retailWhaleScan?.phase === 'loading' ||
-                    dailyVolumeScan?.phase === 'loading' ||
-                    variantScan?.phase === 'loading'
-                  }
+                  disabled={oiLoading || scanBusy}
                   onClick={() => void runSmNotionalRatioScan()}
                   title={`${SM_NOTIONAL_RATIO_SCAN_TITLE}：其中大户成本名义多/空比（不是全体数量比）`}
                 >
@@ -1081,14 +1220,7 @@ export default function App() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={
-                    oiLoading ||
-                    smNotionalScan?.phase === 'loading' ||
-                    smOverviewValueScan?.phase === 'loading' ||
-                    retailWhaleScan?.phase === 'loading' ||
-                    dailyVolumeScan?.phase === 'loading' ||
-                    variantScan?.phase === 'loading'
-                  }
+                  disabled={oiLoading || scanBusy}
                   onClick={() => void runRetailWhaleDivergenceScan()}
                   title={`${RETAIL_WHALE_DIVERGENCE_SCAN_TITLE}：扫描全部 USDT-M 永续，筛选大户持仓 LSR 与用户 LSR 分处 1 两侧的合约，反差越大越靠前`}
                 >
@@ -1097,14 +1229,7 @@ export default function App() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={
-                    oiLoading ||
-                    smNotionalScan?.phase === 'loading' ||
-                    smOverviewValueScan?.phase === 'loading' ||
-                    retailWhaleScan?.phase === 'loading' ||
-                    dailyVolumeScan?.phase === 'loading' ||
-                    variantScan?.phase === 'loading'
-                  }
+                  disabled={oiLoading || scanBusy}
                   onClick={openDailyVolumeScanDrawer}
                   title="扫描全部 USDT-M 永续：最近 3 个完整日的平均成交币量，相对此前 7 个完整日放大至少 5 倍；按倍数降序"
                 >
@@ -1113,14 +1238,16 @@ export default function App() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={
-                    oiLoading ||
-                    smNotionalScan?.phase === 'loading' ||
-                    smOverviewValueScan?.phase === 'loading' ||
-                    retailWhaleScan?.phase === 'loading' ||
-                    dailyVolumeScan?.phase === 'loading' ||
-                    variantScan?.phase === 'loading'
-                  }
+                  disabled={oiLoading || scanBusy}
+                  onClick={openAlphaFuturesScanDrawer}
+                  title="已上 Binance Alpha、且已有 USDT 永续的合约。按 Alpha 市值从低到高排序，附带近 30 个完整日成交额、账户/大户/聪明钱多空比"
+                >
+                  {ALPHA_FUTURES_SCAN_TITLE}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={oiLoading || scanBusy}
                   onClick={() => void openSmOverviewValueScanDrawer()}
                   title={`${SM_OVERVIEW_VALUE_SCAN_TITLE}：优先打开今天缓存；无缓存时扫描全部 USDT-M 永续 overview，筛出多单/空单大户价值超过 $5M 的合约，并与昨天缓存对比标记 NEW`}
                 >
@@ -1173,12 +1300,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-ghost"
-                disabled={
-                  smLoading ||
-                  smDirectionScan?.phase === 'loading' ||
-                  smNotionalScan?.phase === 'loading' ||
-                  dailyVolumeScan?.phase === 'loading'
-                }
+                disabled={smLoading || scanBusy}
                 onClick={() => void openSmDirectionScanDrawer()}
                 title="拉取 24h 与 1h 聪明钱列表，筛出净方向相反合约，按两档净名义差排序"
               >
@@ -1276,15 +1398,7 @@ export default function App() {
             ) : null}
             <SignalTable
               rows={tableRows}
-              onSelect={
-                variantScan?.phase === 'loading' ||
-                smNotionalScan?.phase === 'loading' ||
-                smOverviewValueScan?.phase === 'loading' ||
-                retailWhaleScan?.phase === 'loading' ||
-                dailyVolumeScan?.phase === 'loading'
-                  ? () => {}
-                  : setSelected
-              }
+              onSelect={scanBusy ? () => {} : setSelected}
             />
           </>
         ) : null}
@@ -1317,6 +1431,7 @@ export default function App() {
         smOverviewValueScan={smOverviewValueScan}
         retailWhaleDivergenceScan={retailWhaleScan}
         dailyVolumeScan={dailyVolumeScan}
+        alphaFuturesScan={alphaFuturesScan}
         pendingSymbol={detailPendingSymbol}
         openDetailError={detailOpenError}
         onCloseAllDrawers={closeDetailDrawer}
@@ -1339,6 +1454,10 @@ export default function App() {
           openSmSymbolDetail(symbol, false)
         }
         onRefreshDailyVolumeScan={() => void runDailyVolumeScan()}
+        onPickFromAlphaFuturesScan={(symbol) =>
+          openSmSymbolDetail(symbol, false)
+        }
+        onRefreshAlphaFuturesScan={() => void runAlphaFuturesScan()}
       />
     </div>
   )

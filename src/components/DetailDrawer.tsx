@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import {
   LineChart,
@@ -69,6 +77,11 @@ import {
   type DailyVolumeScanUiState,
 } from '../lib/dailyVolumeScan'
 import { DailyVolumeScanTable } from './DailyVolumeScanTable'
+import {
+  ALPHA_FUTURES_SCAN_TITLE,
+  type AlphaFuturesScanUiState,
+} from '../lib/alphaFuturesScan'
+import { AlphaFuturesScanTable } from './AlphaFuturesScanTable'
 import { VariantSignalsPanel } from './VariantSignalsPanel'
 import { SpotTokenInfoPanel } from './SpotTokenInfoPanel'
 import {
@@ -166,6 +179,79 @@ function fmtSmUsd(n: number): string {
   return `$${n.toFixed(0)}`
 }
 
+const DRAWER_WIDTH_KEY = 'oi-monitor-drawer-width'
+const DRAWER_DEFAULT_WIDTH = 1440
+const DRAWER_MIN_WIDTH = 720
+
+function readDrawerWidth(): number {
+  if (typeof localStorage === 'undefined') return DRAWER_DEFAULT_WIDTH
+  try {
+    const raw = Number(localStorage.getItem(DRAWER_WIDTH_KEY))
+    if (Number.isFinite(raw) && raw >= DRAWER_MIN_WIDTH) return raw
+  } catch {
+    /* ignore */
+  }
+  return DRAWER_DEFAULT_WIDTH
+}
+
+function clampDrawerWidth(px: number): number {
+  const max =
+    typeof window === 'undefined'
+      ? DRAWER_DEFAULT_WIDTH
+      : Math.max(DRAWER_MIN_WIDTH, window.innerWidth)
+  return Math.round(Math.min(max, Math.max(DRAWER_MIN_WIDTH, px)))
+}
+
+function DrawerShell({
+  stack,
+  onClose,
+  label,
+  busy,
+  width,
+  onResizePointerDown,
+  onResizePointerMove,
+  onResizePointerUp,
+  children,
+}: {
+  stack: 'base' | 'top'
+  onClose: () => void
+  label: string
+  busy?: boolean
+  width: number
+  onResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onResizePointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onResizePointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={`drawer-backdrop drawer-stack-${stack}`}
+      onClick={onClose}
+    >
+      <aside
+        className="drawer"
+        style={{ ['--drawer-w' as string]: `${width}px` }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={label}
+        aria-busy={busy}
+      >
+        <div
+          className="drawer-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖拽调整抽屉宽度"
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          onPointerCancel={onResizePointerUp}
+        />
+        {children}
+      </aside>
+    </div>
+  )
+}
+
 function labelSmRange(r: SmartMoneyTimeRange): string {
   switch (r) {
     case '30m':
@@ -189,6 +275,7 @@ export function DetailDrawer({
   smOverviewValueScan,
   retailWhaleDivergenceScan,
   dailyVolumeScan,
+  alphaFuturesScan,
   pendingSymbol,
   openDetailError,
   onCloseAllDrawers,
@@ -205,6 +292,8 @@ export function DetailDrawer({
   onRefreshRetailWhaleDivergenceScan,
   onPickFromDailyVolumeScan,
   onRefreshDailyVolumeScan,
+  onPickFromAlphaFuturesScan,
+  onRefreshAlphaFuturesScan,
 }: {
   row: SymbolInsight | null
   variantScan: VariantScanUiState | null
@@ -213,6 +302,7 @@ export function DetailDrawer({
   smOverviewValueScan: SmOverviewValueScanUiState | null
   retailWhaleDivergenceScan: RetailWhaleDivergenceScanUiState | null
   dailyVolumeScan: DailyVolumeScanUiState | null
+  alphaFuturesScan: AlphaFuturesScanUiState | null
   /** 单合约详情拉取中（如从聪明钱列表打开） */
   pendingSymbol?: string | null
   openDetailError?: string | null
@@ -234,6 +324,8 @@ export function DetailDrawer({
   onRefreshRetailWhaleDivergenceScan: () => void
   onPickFromDailyVolumeScan: (symbol: string) => void
   onRefreshDailyVolumeScan: () => void
+  onPickFromAlphaFuturesScan: (symbol: string) => void
+  onRefreshAlphaFuturesScan: () => void
 }) {
   const [klines, setKlines] = useState<KlineCandle[] | null>(null)
   const [klErr, setKlErr] = useState<string | null>(null)
@@ -252,6 +344,60 @@ export function DetailDrawer({
   const [smOvErr, setSmOvErr] = useState<string | null>(null)
   /** 聚合 /api 列表无 oiHist 时在抽屉内补全 */
   const [rowEnriched, setRowEnriched] = useState<SymbolInsight | null>(null)
+  const [drawerWidth, setDrawerWidth] = useState(readDrawerWidth)
+  const drawerDragRef = useRef<{ x: number; w: number } | null>(null)
+  const drawerWidthRef = useRef(drawerWidth)
+  drawerWidthRef.current = drawerWidth
+
+  const onDrawerResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      drawerDragRef.current = { x: event.clientX, w: drawerWidthRef.current }
+      document.body.classList.add('drawer-resizing')
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        /* 个别环境不支持 capture，仍可用指针移动调整宽度 */
+      }
+    },
+    [],
+  )
+
+  const onDrawerResizePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const drag = drawerDragRef.current
+      if (!drag) return
+      const next = clampDrawerWidth(drag.w + (drag.x - event.clientX))
+      drawerWidthRef.current = next
+      setDrawerWidth(next)
+    },
+    [],
+  )
+
+  const onDrawerResizePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!drawerDragRef.current) return
+      drawerDragRef.current = null
+      document.body.classList.remove('drawer-resizing')
+      try {
+        localStorage.setItem(DRAWER_WIDTH_KEY, String(drawerWidthRef.current))
+      } catch {
+        /* ignore */
+      }
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    },
+    [],
+  )
+
+  const drawerResize = {
+    width: drawerWidth,
+    onResizePointerDown: onDrawerResizePointerDown,
+    onResizePointerMove: onDrawerResizePointerMove,
+    onResizePointerUp: onDrawerResizePointerUp,
+  }
 
   /** 同 row 有值时非 null（`row` 有值时总有 `row` 作回退） */
   const displayRow: SymbolInsight | null =
@@ -425,7 +571,8 @@ export function DetailDrawer({
       smNotionalRatioScan ||
       smOverviewValueScan ||
       retailWhaleDivergenceScan ||
-      dailyVolumeScan,
+      dailyVolumeScan ||
+      alphaFuturesScan,
   )
   const hasTopOverlay = Boolean(
     row || pendingSymbol || openDetailError,
@@ -434,17 +581,13 @@ export function DetailDrawer({
 
   const variantScanPanel =
     variantScan ? (
-      <div
-        className="drawer-backdrop drawer-stack-base"
-        onClick={onCloseAllDrawers}
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label={`Top ${variantScan.depth} V4 V7 V8 扫描`}
+        busy={variantScan.phase === 'loading'}
+        {...drawerResize}
       >
-        <aside
-          className="drawer drawer-variant-scan"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label={`Top ${variantScan.depth} V4 V7 V8 扫描`}
-          aria-busy={variantScan.phase === 'loading'}
-        >
           <header className="drawer-head">
             <div>
               <h2>
@@ -557,23 +700,18 @@ export function DetailDrawer({
               )}
             </section>
           ) : null}
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const smDirectionScanPanel =
     smDirectionScan ? (
-      <div
-        className="drawer-backdrop drawer-stack-base"
-        onClick={onCloseAllDrawers}
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label="聪明钱 24h 与 1h 净方向扫描"
+        busy={smDirectionScan.phase === 'loading'}
+        {...drawerResize}
       >
-        <aside
-          className="drawer drawer-variant-scan"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label="聪明钱 24h 与 1h 净方向扫描"
-          aria-busy={smDirectionScan.phase === 'loading'}
-        >
           <header className="drawer-head">
             <div>
               <h2>聪明钱 · 24h / 1h 净方向背离</h2>
@@ -696,23 +834,18 @@ export function DetailDrawer({
               )}
             </section>
           ) : null}
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const smNotionalRatioScanPanel =
     smNotionalRatioScan ? (
-      <div
-        className="drawer-backdrop drawer-stack-base"
-        onClick={onCloseAllDrawers}
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label={`${SM_NOTIONAL_RATIO_SCAN_TITLE} 扫描`}
+        busy={smNotionalRatioScan.phase === 'loading'}
+        {...drawerResize}
       >
-        <aside
-          className="drawer drawer-variant-scan"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label={`${SM_NOTIONAL_RATIO_SCAN_TITLE} 扫描`}
-          aria-busy={smNotionalRatioScan.phase === 'loading'}
-        >
           <header className="drawer-head">
             <div>
               <h2>聪明钱 · {SM_NOTIONAL_RATIO_SCAN_TITLE}</h2>
@@ -786,23 +919,18 @@ export function DetailDrawer({
               )}
             </section>
           ) : null}
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const smOverviewValueScanPanel =
     smOverviewValueScan ? (
-      <div
-        className="drawer-backdrop drawer-stack-base"
-        onClick={onCloseAllDrawers}
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label={`${SM_OVERVIEW_VALUE_SCAN_TITLE} 扫描`}
+        busy={smOverviewValueScan.phase === 'loading'}
+        {...drawerResize}
       >
-        <aside
-          className="drawer drawer-variant-scan"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label={`${SM_OVERVIEW_VALUE_SCAN_TITLE} 扫描`}
-          aria-busy={smOverviewValueScan.phase === 'loading'}
-        >
           <header className="drawer-head">
             <div>
               <h2>聪明钱 · {SM_OVERVIEW_VALUE_SCAN_TITLE}</h2>
@@ -884,23 +1012,18 @@ export function DetailDrawer({
               )}
             </section>
           ) : null}
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const retailWhaleDivergenceScanPanel =
     retailWhaleDivergenceScan ? (
-      <div
-        className="drawer-backdrop drawer-stack-base"
-        onClick={onCloseAllDrawers}
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label={`${RETAIL_WHALE_DIVERGENCE_SCAN_TITLE} 扫描`}
+        busy={retailWhaleDivergenceScan.phase === 'loading'}
+        {...drawerResize}
       >
-        <aside
-          className="drawer drawer-variant-scan"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label={`${RETAIL_WHALE_DIVERGENCE_SCAN_TITLE} 扫描`}
-          aria-busy={retailWhaleDivergenceScan.phase === 'loading'}
-        >
           <header className="drawer-head">
             <div>
               <h2>{RETAIL_WHALE_DIVERGENCE_SCAN_TITLE}</h2>
@@ -979,23 +1102,18 @@ export function DetailDrawer({
               )}
             </section>
           ) : null}
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const dailyVolumeScanPanel =
     dailyVolumeScan ? (
-      <div
-        className="drawer-backdrop drawer-stack-base"
-        onClick={onCloseAllDrawers}
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label={`${DAILY_VOLUME_SCAN_TITLE} 扫描`}
+        busy={dailyVolumeScan.phase === 'loading'}
+        {...drawerResize}
       >
-        <aside
-          className="drawer drawer-variant-scan"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label={`${DAILY_VOLUME_SCAN_TITLE} 扫描`}
-          aria-busy={dailyVolumeScan.phase === 'loading'}
-        >
           <header className="drawer-head">
             <div>
               <h2>{DAILY_VOLUME_SCAN_TITLE}</h2>
@@ -1072,22 +1190,104 @@ export function DetailDrawer({
               )}
             </section>
           ) : null}
-        </aside>
-      </div>
+      </DrawerShell>
+    ) : null
+
+  const alphaFuturesScanPanel =
+    alphaFuturesScan ? (
+      <DrawerShell
+        stack="base"
+        onClose={onCloseAllDrawers}
+        label={`${ALPHA_FUTURES_SCAN_TITLE} 扫描`}
+        busy={alphaFuturesScan.phase === 'loading'}
+        {...drawerResize}
+      >
+          <header className="drawer-head">
+            <div>
+              <h2>{ALPHA_FUTURES_SCAN_TITLE}</h2>
+              <p className="muted small">
+                已上 Binance Alpha、且已有 USDT 永续的合约。按 Alpha
+                市值从低到高排，方便看低市值里有没有放量异动。成交额为近 30
+                个完整日的合约计价成交额；账户多空是全体账户人数比，大户持仓是大户持仓比，聪明钱多空是全体聪明钱持仓数量比。
+              </p>
+              {alphaFuturesScan.phase === 'done' ? (
+                <p className="muted small drawer-variant-cache-line">
+                  完成时间 · {formatVariantScanSnapshot(alphaFuturesScan.doneAtMs)} ·{' '}
+                  {alphaFuturesScan.fromCache ? '今日缓存' : '刚刚扫描'}
+                </p>
+              ) : null}
+            </div>
+            <div className="drawer-head-actions">
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                disabled={alphaFuturesScan.phase === 'loading'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRefreshAlphaFuturesScan()
+                }}
+              >
+                重新扫描
+              </button>
+              <button type="button" className="ghost" onClick={onCloseAllDrawers}>
+                关闭
+              </button>
+            </div>
+          </header>
+          {alphaFuturesScan.phase === 'loading' ? (
+            <section className="drawer-section">
+              <p className="muted small" style={{ marginTop: 0 }}>
+                {alphaFuturesScan.progress}
+              </p>
+              <div
+                className="sk sk-line"
+                style={{ height: 120, borderRadius: 6, marginTop: 12 }}
+              />
+            </section>
+          ) : null}
+          {alphaFuturesScan.phase === 'error' ? (
+            <section className="drawer-section">
+              <p className="banner err" style={{ margin: 0 }}>
+                {alphaFuturesScan.error}
+              </p>
+            </section>
+          ) : null}
+          {alphaFuturesScan.phase === 'done' ? (
+            <section className="drawer-section">
+              {alphaFuturesScan.rows.length === 0 ? (
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  当前没有同时上了 Alpha 和 USDT 永续的合约。
+                </p>
+              ) : (
+                <>
+                  <p className="muted small daily-volume-legend" style={{ marginTop: 0 }}>
+                    共 {alphaFuturesScan.rows.length} / {alphaFuturesScan.totalCount}{' '}
+                    个合约
+                    {alphaFuturesScan.failedCount > 0
+                      ? `，${alphaFuturesScan.failedCount} 个合约拉取失败已跳过`
+                      : ''}
+                    。走势里灰色是更早的成交额，蓝色是此前 7 日，绿色是最近 3
+                    日。多空比大于 1 偏多。
+                  </p>
+                  <AlphaFuturesScanTable
+                    rows={alphaFuturesScan.rows}
+                    onOpenDetail={onPickFromAlphaFuturesScan}
+                  />
+                </>
+              )}
+            </section>
+          ) : null}
+      </DrawerShell>
     ) : null
 
   const errorOverlay =
     openDetailError && !row ? (
-      <div
-        className="drawer-backdrop drawer-stack-top"
-        onClick={onCloseSymbolDrawer}
+      <DrawerShell
+        stack="top"
+        onClose={onCloseSymbolDrawer}
+        label="详情加载失败"
+        {...drawerResize}
       >
-        <aside
-          className="drawer"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label="详情加载失败"
-        >
           <header className="drawer-head">
             <div>
               <h2>无法打开详情</h2>
@@ -1099,23 +1299,18 @@ export function DetailDrawer({
               关闭
             </button>
           </header>
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const pendingOverlay =
     pendingSymbol && !row && !openDetailError ? (
-      <div
-        className="drawer-backdrop drawer-stack-top"
-        onClick={onCloseSymbolDrawer}
+      <DrawerShell
+        stack="top"
+        onClose={onCloseSymbolDrawer}
+        label="合约详情加载中"
+        busy
+        {...drawerResize}
       >
-        <aside
-          className="drawer"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-label="合约详情加载中"
-          aria-busy
-        >
           <header className="drawer-head">
             <div>
               <h2>{pendingSymbol}</h2>
@@ -1131,8 +1326,7 @@ export function DetailDrawer({
               style={{ height: 160, borderRadius: 8, marginTop: 0 }}
             />
           </section>
-        </aside>
-      </div>
+      </DrawerShell>
     ) : null
 
   const premiumMatch =
@@ -1152,15 +1346,11 @@ export function DetailDrawer({
 
   const mainDetailDrawer =
     row ? (
-      <div
-        className="drawer-backdrop drawer-stack-top"
-        onClick={onCloseSymbolDrawer}
-      >
-      <aside
-        className="drawer"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="详情"
+      <DrawerShell
+        stack="top"
+        onClose={onCloseSymbolDrawer}
+        label="详情"
+        {...drawerResize}
       >
         <header className="drawer-head">
           <div>
@@ -1429,8 +1619,7 @@ export function DetailDrawer({
             ratioSeries={ratioData}
           />
         ) : null}
-      </aside>
-    </div>
+      </DrawerShell>
     ) : null
 
   return (
@@ -1441,6 +1630,7 @@ export function DetailDrawer({
       {smOverviewValueScanPanel}
       {retailWhaleDivergenceScanPanel}
       {dailyVolumeScanPanel}
+      {alphaFuturesScanPanel}
       {createPortal(
         <>
           {errorOverlay}
